@@ -38,7 +38,7 @@ unet = Unet(
 state = State()
 video = \
     (Video(video=torch.randn((16,288,512,3))) \
-        | Debug("Video to video")
+        | Debug("Video to video") \
         | VideoLoad('src/tests_func/bunny.mp4', device='cuda', video_length=48) \
         | VideoShow(fps=16) \
         | VaeVideoEncode(vae=pipe.vae.to('cuda')) \
@@ -47,7 +47,7 @@ video = \
         > state("latent") \
         ) >> \
     (Latent(latent=torch.randn((1,4,16,36,64)), device='cuda') \
-        - Debug("Text to video")
+        - Debug("Text to video") \
         - Noise(scheduler=pipe.scheduler) \
         - LatentShow(fps=16, vae=pipe.vae.to('cuda')) \
         < state("latent") \
@@ -66,7 +66,7 @@ video = \
         < state('latent') \
         ) >> \
     (state
-        | Debug("Diffusion loop")
+        | Debug("Diffusion loop") \
         | Diffuse(callback=lambda timestep, state: state | unet)
         | VaeLatentDecode(vae=pipe.vae.to('cuda'))
     ) \
