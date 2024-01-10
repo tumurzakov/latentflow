@@ -12,14 +12,16 @@ class Unet(Flow):
             scheduler,
             guidance_scale=7.5,
             do_classifier_free_guidance = True,
+            fp16 = False,
             ):
 
         self.unet = unet
         self.scheduler = scheduler
         self.guidance_scale = guidance_scale
         self.do_classifier_free_guidance = do_classifier_free_guidance
+        self.fp16 = fp16
 
-        logging.debug("Unet init %s %s", unet.device, unet.dtype)
+        logging.debug("Unet init %s %s fp16=%s", unet.device, unet.dtype, self.fp16)
         logging.debug("Unet init %s %s", guidance_scale, do_classifier_free_guidance)
         logging.debug("Unet init %s", type(scheduler))
 
@@ -29,6 +31,8 @@ class Unet(Flow):
         timestep = state['timestep']
         latent = state['latent']
         embeddings = state['embeddings']
+        down_block_res_samples = state['down_block_res_samples']
+        mid_block_res_sample = state['mid_block_res_sample']
 
         logging.debug("Unet %s %s %s",
                 timestep, latent, embeddings)
@@ -39,10 +43,14 @@ class Unet(Flow):
 
         prompt_embeddings = embeddings.embeddings
 
-        noise_pred = self.unet(
-                latent_model_input,
-                timestep,
-                encoder_hidden_states=prompt_embeddings).sample
+        with torch.autocast('cuda', enabled=self.fp16, dtype=torch.float16):
+            noise_pred = self.unet(
+                    latent_model_input,
+                    timestep,
+                    encoder_hidden_states=prompt_embeddings,
+                    down_block_additional_residuals=down_block_res_samples,
+                    mid_block_additional_residual=mid_block_res_sample,
+                    ).sample
 
         # perform guidance
         if self.do_classifier_free_guidance:

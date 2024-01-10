@@ -1,12 +1,14 @@
+import os
 import torch
 import logging
 from typing import Callable, List, Optional, Tuple, Union, Generator
 
+from .flow import Flow
 from .latent import Latent
 from .schedule import SchedulerInput
 from .ddim_inversion import ddim_inversion
 
-class Invert:
+class Invert(Flow):
     def __init__(self,
             tokenizer=None,
             text_encoder=None,
@@ -16,6 +18,7 @@ class Invert:
             prompt: str = "",
             video_length: int = None,
             temporal_context: int = None,
+            cache: str = None,
             ):
 
         self.tokenizer = tokenizer
@@ -26,13 +29,31 @@ class Invert:
         self.prompt = prompt
         self.video_length = video_length
         self.temporal_context = temporal_context
+        self.cache = cache
 
-        logging.debug("Invert(%s, %s, %s)",
+        logging.debug("Invert init %s, %s, %s",
                 type(self.scheduler), self.steps, self.prompt)
 
     def apply(self, latent: Latent) -> Latent:
+        logging.debug("Invert apply %s", latent)
 
-        latents = latent.latent
+        if self.cache and os.path.isfile(self.cache):
+            logging.debug("Invert load cache %s", self.cache)
+            inv_latents = torch.load(self.cache)
+        else:
+            inv_latents = self.invert(latent.latent)
+
+            if self.cache:
+                logging.debug("Invert save cache %s", self.cache)
+                torch.save(inv_latents, self.cache)
+
+        latents = inv_latents[-1]
+        latents = latents[:,:,:latent.latent.shape[2],:,:]
+        latents = latents * self.scheduler.init_noise_sigma.to(self.text_encoder.device)
+        return Latent(latent=latents)
+
+    @torch.no_grad()
+    def invert(self, latents: torch.Tensor) -> Latent:
 
         if self.video_length is None:
             self.video_length = latents.shape[2]
@@ -59,4 +80,4 @@ class Invert:
         for s in range(self.steps+1):
             inv_latents[s] = torch.cat(inv_latents[s], dim=2)
 
-        return Latent(latent=inv_latents[-1])
+        return inv_latents

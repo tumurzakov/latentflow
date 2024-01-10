@@ -25,11 +25,13 @@ class State(Flow):
         self[self.key] = value
 
     def __setitem__(self, key, value):
-        logging.debug("State set %s %s", key, value)
+        logging.debug("State set %s", key)
         self.state[key] = value
 
     def __getitem__(self, key):
-        return self.state[key]
+        if key in self.state:
+            return self.state[key]
+        return None
 
     def __str__(self):
         return f'State({self.state.keys()})'

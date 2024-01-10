@@ -1,6 +1,10 @@
-# LatentFlow is pseudo functional stable diffusion
+# LatentFlow is a functional-style API for Stable Diffusion
+
+* 2024-01-11 LoRA and ControlNet added
+* 2023-01-10 Initial release
 
 ```python
+
 from latentflow.state import State
 from latentflow.video import Video
 from latentflow.latent import Latent
@@ -19,15 +23,14 @@ from latentflow.latent_show import LatentShow
 from latentflow.noise import Noise
 from latentflow.add_noise import AddNoise
 from latentflow.schedule import Schedule
-from latentflow.debug import Debug
+from latentflow.debug import Debug, DebugHash
 from latentflow.invert import Invert
 from latentflow.bypass import Bypass
+from latentflow.lora import LoraOn, LoraOff
+from latentflow.apply import Apply
+from latentflow.controlnet import ControlNet
 
-import importlib
-import latentflow.video_load
-importlib.reload(latentflow.video_load)
-from latentflow.video_load import VideoLoad
-
+import torch
 
 unet = Unet(
     unet=pipe.unet.to('cuda'),
@@ -35,39 +38,79 @@ unet = Unet(
     guidance_scale=10,
 )
 
+cnet = ControlNet(
+    controlnet=pipe.controlnet.to('cuda'),
+    scheduler=pipe.scheduler,
+)
+
 state = State()
 video = \
-    (Video(video=torch.randn((16,288,512,3))) \
-        | Debug("Video to video") \
-        | VideoLoad('src/tests_func/bunny.mp4', device='cuda', video_length=48) \
-        | VideoShow(fps=16) \
-        | VaeVideoEncode(vae=pipe.vae.to('cuda')) \
-        | Invert(tokenizer=pipe.tokenizer, text_encoder=pipe.text_encoder, unet=pipe.unet, scheduler=pipe.scheduler) \
-        | LatentShow(fps=16, vae=pipe.vae.to('cuda')) \
-        > state("latent") \
+    (Debug("Video to video")
+        | VideoLoad(f'input/in.mp4', device='cuda', video_length=48)
+        - VideoShow(fps=16)
+        | VaeVideoEncode(
+            vae=pipe.vae.to('cuda'),
+            cache=f'infer/latents.pth',
+            video_length=48,
+            )
+        - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
+        | Invert(
+            tokenizer=pipe.tokenizer,
+            text_encoder=pipe.text_encoder,
+            unet=pipe.unet,
+            scheduler=pipe.scheduler,
+            cache=f'infer/inv_latents.pth',
+            )
+        - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
+        | DebugHash(lambda latent: latent.latent)
+        > state("latent")
         ) >> \
-    (Latent(latent=torch.randn((1,4,16,36,64)), device='cuda') \
-        - Debug("Text to video") \
-        - Noise(scheduler=pipe.scheduler) \
-        - LatentShow(fps=16, vae=pipe.vae.to('cuda')) \
-        < state("latent") \
+    (Latent(latent=torch.randn((1,4,48,36,64)), device='cuda')
+        - Debug("Text to video")
+        - Noise(scheduler=pipe.scheduler)
+        - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
+        < state("latent")
         ) >> \
-    (Prompt("a cat walking down city street") \
-        | CompelPromptEncode(tokenizer=pipe.tokenizer, text_encoder=pipe.text_encoder.to('cuda')) \
-        > state("embeddings") \
+    (Prompt(prompt=
+               "(a cat walking down city street)1.0,"
+            negative_prompt=
+               "deformed, distorted, disfigured)1.0,"
+               "poorly drawn, bad anatomy, wrong anatomy,"
+               "extra limb,missing limb, floating limbs,"
+               "(mutated hands and fingers)1.0,"
+               "disconnected limbs, mutation, mutated,"
+               "ugly, disgusting, blurry, amputation,"
+           )
+        | CompelPromptEncode(tokenizer=pipe.tokenizer, text_encoder=pipe.text_encoder.to('cuda'))
+        | Apply(lambda embeddings: PromptEmbeddings(embeddings=embeddings.embeddings.repeat(48, 1, 1)))
+        | DebugHash(lambda embeddings: embeddings.embeddings)
+        > state("embeddings")
         ) >> \
+    (Debug("Loading controlnet")
+      | VideoLoad([
+              f'lineart_out/lineart.mp4',
+          ], device='cuda', video_length=48, width=512, height=288)
+      | VideoShow(fps=16)
+      > cnet
+      ) >> \
     (state \
-        | Schedule(scheduler=pipe.scheduler, num_inference_steps=10, strength=0.7) \
-        > state('timesteps') \
+        | Schedule(scheduler=pipe.scheduler, num_inference_steps=10)
+        > state('timesteps')
         ) >> \
-    (state['latent'] \
-        - Debug("Adding noise")
-        - AddNoise(scheduler=pipe.scheduler) \
-        < state('latent') \
+    (state['latent']
+        - AddNoise(scheduler=pipe.scheduler)
+        < state('latent')
         ) >> \
     (state
-        | Debug("Diffusion loop") \
-        | Diffuse(callback=lambda timestep, state: state | unet)
+        | LoraOn(loras={
+            f"lora/details.safetensors": 0.8,
+            }, pipe=pipe)
+        | Diffuse(callback=lambda timestep, state:
+                  state
+                  | cnet(controlnet_scale=[1.0])
+                  | unet
+                 )
+        | LoraOff(pipe=pipe)
         | VaeLatentDecode(vae=pipe.vae.to('cuda'))
     ) \
     | VideoShow(fps=16)

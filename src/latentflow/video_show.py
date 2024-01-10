@@ -12,8 +12,10 @@ class VideoShow(Flow):
     def apply(self, video) -> Video:
         logging.debug('ShowVideo(%s)', video)
 
-        v = video.hwc().detach().cpu()
-        frames = [np.array(img) for img in v]
-        mediapy.show_video(frames, fps=self.fps)
+        videos = video.hwc().detach().cpu()
+        for v in videos:
+            frames = [np.array(img) for img in v]
+            mediapy.show_video(frames, fps=self.fps)
+
         return video
 

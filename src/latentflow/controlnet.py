@@ -1,0 +1,182 @@
+import torch
+import logging
+import PIL
+import numpy as np
+from einops import rearrange
+from diffusers.utils.torch_utils import is_compiled_module
+from diffusers.pipelines.controlnet import MultiControlNetModel
+from diffusers.models import AutoencoderKL, ControlNetModel
+from typing import Callable, List, Optional, Tuple, Union, Generator
+
+from .flow import Flow
+
+class ControlNet(Flow):
+    def __init__(self,
+            controlnet = None,
+            scheduler = None,
+            control_guidance_start: Union[float, List[float]] = 0.0,
+            control_guidance_end: Union[float, List[float]] = 1.0,
+            guess_mode: bool = False,
+            do_classifier_free_guidance: bool = True,
+            ):
+
+        assert isinstance(controlnet, MultiControlNetModel)
+
+        self.controlnet = controlnet
+        self.scheduler = scheduler
+        self.guess_mode = guess_mode
+
+        self.control_guidance_start = control_guidance_start
+        self.control_guidance_end = control_guidance_end
+
+        self.do_classifier_free_guidance = do_classifier_free_guidance
+
+        self.controlnet = self.controlnet._orig_mod if is_compiled_module(self.controlnet) else self.controlnet
+
+        # align format for control guidance
+        if not isinstance(control_guidance_start, list) and isinstance(control_guidance_end, list):
+            self.control_guidance_start = len(control_guidance_end) * [control_guidance_start]
+        elif not isinstance(control_guidance_end, list) and isinstance(control_guidance_start, list):
+            self.control_guidance_end = len(control_guidance_start) * [control_guidance_end]
+        elif not isinstance(control_guidance_start, list) and not isinstance(control_guidance_end, list):
+            mult = len(controlnet.nets) if isinstance(controlnet, MultiControlNetModel) else 1
+            self.control_guidance_start, self.control_guidance_end = mult * [self.control_guidance_start], mult * [
+                self.control_guidance_end
+            ]
+
+        global_pool_conditions = (
+            controlnet.config.global_pool_conditions
+            if isinstance(controlnet, ControlNetModel)
+            else controlnet.nets[0].config.global_pool_conditions
+        )
+        self.guess_mode = self.guess_mode or global_pool_conditions
+
+    def set(self, controlnet_video):
+        controlnet_images = controlnet_video.chw().float()/255.0
+
+        self.controlnet_images = controlnet_images.to(
+                device=self.controlnet.device,
+                dtype=self.controlnet.dtype)
+
+    def __call__(self, controlnet_scale = 1.0):
+
+        self.controlnet_scale = controlnet_scale \
+                if isinstance(controlnet_scale, list) \
+                else [controlnet_scale] * len(self.controlnet.nets)
+
+        return self
+
+    @torch.no_grad()
+    def apply(self, state):
+
+        timesteps = state['timesteps']
+        timestep_index = state['timestep_index']
+        timestep = state['timestep']
+        embeddings = state['embeddings'].embeddings
+
+        latents = state['latent'].latent
+        latent_model_input = latents.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)
+        latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep)
+
+        controlnet_images = self.controlnet_images
+        controlnet_conditioning_scale = self.controlnet_scale
+
+        if isinstance(self.controlnet, MultiControlNetModel) and isinstance(controlnet_conditioning_scale, float):
+            controlnet_conditioning_scale = [controlnet_conditioning_scale] * len(self.controlnet.nets)
+
+        temporal_context = latents.shape[2]
+
+        controlnet_keep = []
+        for i in range(len(timesteps)):
+            keeps = [
+                1.0 - float(i / len(timesteps) < s or (i + 1) / len(timesteps) > e)
+                for s, e in zip(self.control_guidance_start, self.control_guidance_end)
+            ]
+            controlnet_keep.append(keeps[0] if isinstance(self.controlnet, ControlNetModel) else keeps)
+
+        down_block_res_samples, mid_block_res_sample = self.calc_cnet_residuals(
+                timestep_index,
+                timestep,
+                embeddings,
+                controlnet_images,
+                latent_model_input,
+                controlnet_keep,
+                controlnet_conditioning_scale,
+                self.guess_mode,
+                temporal_context,
+                self.do_classifier_free_guidance,
+                )
+
+        state['down_block_res_samples'] = down_block_res_samples
+        state['mid_block_res_sample'] = mid_block_res_sample
+
+        return state
+
+    @torch.no_grad()
+    def calc_cnet_residuals(
+            self,
+            step_index,
+            timestep,
+            embeddings,
+            controlnet_image,
+            latent_model_input,
+            controlnet_keep,
+            controlnet_conditioning_scale,
+            guess_mode,
+            temporal_context,
+            do_classifier_free_guidance):
+
+        down_block_res_samples = None
+        mid_block_res_sample = None
+
+        # controlnet(s) inference
+        if guess_mode and do_classifier_free_guidance:
+            # Infer ControlNet only for the conditional batch.
+            control_model_input = latent_model_input
+            control_model_input = self.scheduler.scale_model_input(control_model_input, timestep)
+        else:
+            control_model_input = latent_model_input
+
+        if isinstance(controlnet_keep[step_index], list):
+            cond_scale = [c * s for c, s in zip(controlnet_conditioning_scale, controlnet_keep[step_index])]
+        else:
+            controlnet_cond_scale = controlnet_conditioning_scale
+            if isinstance(controlnet_cond_scale, list):
+                controlnet_cond_scale = controlnet_cond_scale[0]
+            cond_scale = controlnet_cond_scale * controlnet_keep[step_index]
+
+        if do_classifier_free_guidance and not guess_mode:
+            controlnet_image = controlnet_image.repeat(1,2,1,1,1)
+
+        control_model_input = rearrange(control_model_input, "b c f h w -> (b f) c h w")
+
+        down_block_res_samples, mid_block_res_sample = self.controlnet(
+            control_model_input,
+            timestep,
+            encoder_hidden_states=embeddings,
+            controlnet_cond=controlnet_image,
+            conditioning_scale=cond_scale,
+            guess_mode=guess_mode,
+            return_dict=False,
+        )
+
+        for down_idx in range(len(down_block_res_samples)):
+            down_block_res_samples[down_idx] = rearrange(
+                    down_block_res_samples[down_idx],
+                    '(b f) c h w -> b c f h w',
+                    f=temporal_context)
+
+        mid_block_res_sample = rearrange(
+                mid_block_res_sample,
+                '(b f) c h w -> b c f h w',
+                f=temporal_context)
+
+        if guess_mode and do_classifier_free_guidance:
+            # Infered ControlNet only for the conditional batch.
+            # To apply the output of ControlNet to both the unconditional and conditional batches,
+            # add 0 to the unconditional batch to keep it unchanged.
+            down_block_res_samples = [torch.cat([torch.zeros_like(d), d]) for d in down_block_res_samples]
+            mid_block_res_sample = torch.cat([torch.zeros_like(mid_block_res_sample), mid_block_res_sample])
+
+        return down_block_res_samples, mid_block_res_sample
+

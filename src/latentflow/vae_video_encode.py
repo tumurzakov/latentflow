@@ -1,3 +1,4 @@
+import os
 import torch
 from einops import rearrange
 import logging
@@ -11,32 +12,65 @@ from .video import Video
 
 
 class VaeVideoEncode(VideoEncode):
-    def __init__(self, vae: AutoencoderKL = None, vae_batch=1):
+    def __init__(self,
+            vae: AutoencoderKL = None,
+            vae_batch:int = 1,
+            cache: str = None,
+            video_length: int = None,
+            start_frame: int = 0,
+            ):
         self.vae = vae
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.vae_batch = vae_batch
+        self.cache = cache
+        self.video_length = video_length
+        self.start_frame = start_frame
 
         logging.debug('VaeVideoEncode init %d, vae(%s,%s)',
                 vae_batch,
                 vae.device,
                 vae.dtype)
+        logging.debug('VaeVideoEncode video_length %s %s',
+                video_length, start_frame)
 
     @torch.no_grad()
     def apply(self, video: Video) -> Latent:
         logging.debug('VaeVideoEncode apply video %s', video)
 
-        v = video.chw().to(self.vae.device)
-        logging.debug('VaeVideoEncode apply v %s %s %s', v.shape, v.device, v.dtype)
+        if self.cache and os.path.isfile(self.cache):
+            logging.debug('VaeVideoEncode load cache latent %s', self.cache)
+            latents = torch.load(self.cache)
 
-        l = []
-        for b in range(0, v.shape[0], self.vae_batch):
-            l.append(self.encode(v[b:b+self.vae_batch]))
-        l = torch.cat(l, dim=2)
+            if self.video_length is not None:
+                latents = latents[:,:,self.start_frame:self.video_length,:,:]
+        else:
+            videos = video.chw().to(self.vae.device)
+            logging.debug('VaeVideoEncode apply videos %s %s %s',
+                    videos.shape, videos.device, videos.dtype)
 
-        latent = Latent(latent=l, device=self.vae.device)
+            if self.video_length is None:
+                self.video_length = v.shape[1]
+
+            latents = []
+            for v in videos:
+                latent = []
+                for b in range(self.start_frame, self.video_length, self.vae_batch):
+                    latent.append(self.encode(v[b:b+self.vae_batch]))
+                latent = torch.cat(latent, dim=2)
+                latents.append(latent)
+
+            latents = torch.cat(latents, dim=0)
+
+            if self.cache:
+                logging.debug('VaeVideoEncode save cache latent %s', self.cache)
+                torch.save(latents, self.cache)
+
+        latent = Latent(latent=latents, device=self.vae.device)
         logging.debug('VaeVideoEncode apply latent %s', latent)
+
         return latent
 
+    @torch.no_grad()
     def encode(self, video):
         weight_dtype = self.vae.dtype
 

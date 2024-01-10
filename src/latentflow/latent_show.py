@@ -21,5 +21,6 @@ class LatentShow(Flow):
 
         video = self.vae_decode.apply(latent)
         self.video_show.apply(video)
+
         return latent
 

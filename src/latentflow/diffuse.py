@@ -31,7 +31,8 @@ class Diffuse:
             self.timesteps = timesteps
 
         try:
-            timestep = next(self.timesteps.generator)
+            timestep_index, timestep = next(self.timesteps.generator)
+            state['timestep_index'] = timestep_index
             state['timestep'] = timestep
 
             logging.debug("Diffuse apply %s", timestep)

@@ -46,6 +46,7 @@ class VaeLatentDecode(LatentDecode):
       video = rearrange(video, "(b f) c h w -> b f h w c", f=video_length)
       video = (video / 2 + 0.5).clamp(0, 1)
       video = video.float()
-      return video[0]
+
+      return video
 
 

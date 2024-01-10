@@ -17,7 +17,7 @@ class Video(Flow):
             ):
         self.video = video
         if mode == 'CHW':
-            self.video = rearrange(self.video, 'f c h w -> f h w c')
+            self.video = rearrange(self.video, 'b f c h w -> b f h w c')
 
         if device is not None:
             self.video = self.video
@@ -34,7 +34,7 @@ class Video(Flow):
         return f'Video(None)'
 
     def chw(self):
-        return rearrange(self.video, 'f h w c -> f c h w')
+        return rearrange(self.video, 'b f h w c -> b f c h w')
 
     def hwc(self):
         return self.video

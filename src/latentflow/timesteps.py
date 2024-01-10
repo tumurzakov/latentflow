@@ -31,6 +31,6 @@ class Timesteps(Flow):
         if len(self.timesteps) == 0:
             yield None
 
-        for t in self.timesteps:
-            yield t
+        for i, t in enumerate(self.timesteps):
+            yield i, t
 
