@@ -115,3 +115,9 @@ video = \
     ) \
     | VideoShow(fps=16)
 ```
+
+* `|`  is pipe (like unix pipe)
+* `>` write value in state (like in unix too)
+* `-` bypass for pipe
+* `<` bypass for write
+* `>>` go to next statement 
