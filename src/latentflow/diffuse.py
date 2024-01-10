@@ -6,8 +6,9 @@ from .latent import Latent
 from .prompt_embeddings import PromptEmbeddings
 from .unet import Unet
 from .timesteps import Timesteps
+from .flow import Flow
 
-class Diffuse:
+class Diffuse(Flow):
 
     def __init__(self,
             callback:Optional[Callable] = None,

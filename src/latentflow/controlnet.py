@@ -58,7 +58,10 @@ class ControlNet(Flow):
                 device=self.controlnet.device,
                 dtype=self.controlnet.dtype)
 
-    def __call__(self, controlnet_scale = 1.0):
+    def __call__(self, timestep_index, timestep, controlnet_scale = 1.0):
+
+        self.timestep_index = timestep_index
+        self.timestep = timestep
 
         self.controlnet_scale = controlnet_scale \
                 if isinstance(controlnet_scale, list) \
@@ -69,12 +72,13 @@ class ControlNet(Flow):
     @torch.no_grad()
     def apply(self, state):
 
-        timesteps = state['timesteps']
-        timestep_index = state['timestep_index']
-        timestep = state['timestep']
-        embeddings = state['embeddings'].embeddings
+        timestep_index = self.timestep_index
+        timestep = self.timestep
 
+        timesteps = state['timesteps']
+        embeddings = state['embeddings'].embeddings
         latents = state['latent'].latent
+
         latent_model_input = latents.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)
         latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep)
 

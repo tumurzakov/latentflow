@@ -101,14 +101,14 @@ video = \
         - AddNoise(scheduler=pipe.scheduler)
         < state('latent')
         ) >> \
-    (state
+    (state['latent']
         | LoraOn(loras={
             f"lora/details.safetensors": 0.8,
             }, pipe=pipe)
-        | Diffuse(callback=lambda timestep, state:
+        | Loop(state['timesteps'], callback=lambda timestep_index, timestep:
                   state
-                  | cnet(controlnet_scale=[1.0])
-                  | unet
+                  | cnet(timestep_index, timestep, controlnet_scale=[1.0])
+                  | unet(timestep_index, timestep)
                  )
         | LoraOff(pipe=pipe)
         | VaeLatentDecode(vae=pipe.vae.to('cuda'))
@@ -120,4 +120,4 @@ video = \
 * `>` write value in state (like in unix too)
 * `-` bypass for pipe
 * `<` bypass for write
-* `>>` go to next statement 
+* `>>` go to next statement

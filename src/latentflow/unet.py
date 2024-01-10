@@ -25,10 +25,19 @@ class Unet(Flow):
         logging.debug("Unet init %s %s", guidance_scale, do_classifier_free_guidance)
         logging.debug("Unet init %s", type(scheduler))
 
+    def __call__(self, timestep_index, timestep, controlnet_scale = 1.0):
+
+        self.timestep_index = timestep_index
+        self.timestep = timestep
+
+        return self
+
+
     @torch.no_grad()
     def apply(self, state: State) -> Latent:
 
-        timestep = state['timestep']
+        timestep = self.timestep
+
         latent = state['latent']
         embeddings = state['embeddings']
         down_block_res_samples = state['down_block_res_samples']
