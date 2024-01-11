@@ -9,26 +9,29 @@ class Loop(Flow):
     def __init__(self,
             collection:List = [],
             callback:Optional[Callable] = None,
+            name: Optional[str] = "",
             ):
         self.collection = collection
-        self.current_item = 0
         self.callback = callback
+        self.name = name
 
-        logging.debug("Loop init")
+        logging.debug("Loop init %s", self.name)
 
     def apply(self, other = None):
+        logging.debug("Loop apply %s", type(other))
 
         try:
-            index, item = next(self.collection)
+            item = next(self.collection)
+            item = item if isinstance(item, tuple) else (item,)
 
-            logging.debug("Loop apply %s %s", index, item)
+            logging.debug("Loop apply %s", item)
 
             if self.callback is not None:
-                result = self.callback(index, item)
+                result = self.callback(*item)
 
             return self.apply(result)
 
         except StopIteration:
-            logging.debug("Loop stop")
+            logging.debug("Loop stop %s %s", self.name, type(other))
 
         return other

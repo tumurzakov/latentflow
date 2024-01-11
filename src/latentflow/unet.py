@@ -25,20 +25,21 @@ class Unet(Flow):
         logging.debug("Unet init %s %s", guidance_scale, do_classifier_free_guidance)
         logging.debug("Unet init %s", type(scheduler))
 
-    def __call__(self, timestep_index, timestep, controlnet_scale = 1.0):
+    def __call__(self, timestep_index, timestep, latent):
 
         self.timestep_index = timestep_index
         self.timestep = timestep
+        self.latent = latent
 
         return self
 
 
     @torch.no_grad()
-    def apply(self, state: State) -> Latent:
+    def apply(self, state: State):
 
         timestep = self.timestep
+        latent = self.latent
 
-        latent = state['latent']
         embeddings = state['embeddings']
         down_block_res_samples = state['down_block_res_samples']
         mid_block_res_sample = state['mid_block_res_sample']
@@ -66,11 +67,5 @@ class Unet(Flow):
             noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
             noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
 
-        # compute the previous noisy sample x_t -> x_t-1
-        latent.latent = self.scheduler.step(noise_pred,
-                timestep,
-                latents,
-                ).prev_sample
-
-        return latent
+        return Latent(latent=noise_pred)
 

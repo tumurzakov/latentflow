@@ -10,7 +10,6 @@ from video_encode_test import TestVideoEncode
 from latent_decode_test import TestLatentDecode
 from noise_test import TestNoise
 from invert_test import TestInvert
-from tile_extract_test import TestTileExtract
 from unet_test import TestUnet
 
 class LatentTest(unittest.TestCase):
@@ -41,12 +40,6 @@ class LatentTest(unittest.TestCase):
         latent = TestVideoEncode().apply(video)
         video = TestLatentDecode().apply(latent)
         self.assertTrue(isinstance(video, Video))
-
-    def test_should_extract_tile_from_latent(self):
-        video = Video('HWC', torch.randn((48,288,512,3)))
-        latent = TestVideoEncode().apply(video)
-        latent = TestTileExtract(tile=Tile(1,1,1)).apply(latent)
-        self.assertTrue(isinstance(latent, Latent))
 
     def test_should_substruct_noise(self):
         video = Video('HWC', torch.randn((48,288,512,3)))

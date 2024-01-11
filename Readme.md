@@ -1,9 +1,12 @@
 # LatentFlow is a functional-style API for Stable Diffusion
 
+* 2024-01-11 Simple tile processing added
 * 2024-01-11 LoRA and ControlNet added
 * 2023-01-10 Initial release
 
 ```python
+
+
 
 from latentflow.state import State
 from latentflow.video import Video
@@ -29,11 +32,15 @@ from latentflow.bypass import Bypass
 from latentflow.lora import LoraOn, LoraOff
 from latentflow.apply import Apply
 from latentflow.controlnet import ControlNet
+from latentflow.loop import Loop
+from latentflow.tile import Tile, TileGenerator
+from latentflow.step import Step
 
 import torch
 
+
 unet = Unet(
-    unet=pipe.unet.to('cuda'),
+    unet=pipe.unet.to('cuda'), 
     scheduler=pipe.scheduler,
     guidance_scale=10,
 )
@@ -43,21 +50,24 @@ cnet = ControlNet(
     scheduler=pipe.scheduler,
 )
 
-state = State()
+state = State({
+    'video_length': 96
+})
+
 video = \
     (Debug("Video to video")
-        | VideoLoad(f'input/in.mp4', device='cuda', video_length=48)
+        | VideoLoad(f'input/in.mp4', device='cuda', video_length=state['video_length'])
         - VideoShow(fps=16)
         | VaeVideoEncode(
             vae=pipe.vae.to('cuda'),
             cache=f'infer/latents.pth',
-            video_length=48,
+            video_length=state['video_length'],
             )
         - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
         | Invert(
-            tokenizer=pipe.tokenizer,
-            text_encoder=pipe.text_encoder,
-            unet=pipe.unet,
+            tokenizer=pipe.tokenizer, 
+            text_encoder=pipe.text_encoder, 
+            unet=pipe.unet, 
             scheduler=pipe.scheduler,
             cache=f'infer/inv_latents.pth',
             )
@@ -65,15 +75,15 @@ video = \
         | DebugHash(lambda latent: latent.latent)
         > state("latent")
         ) >> \
-    (Latent(latent=torch.randn((1,4,48,36,64)), device='cuda')
-        - Debug("Text to video")
-        - Noise(scheduler=pipe.scheduler)
+    (Latent(latent=torch.randn((1,4,state['video_length'],36,64)), device='cuda')
+        | Noise(scheduler=pipe.scheduler)
         - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
         < state("latent")
         ) >> \
     (Prompt(prompt=
-               "(a cat walking down city street)1.0,"
+               "(a cat walking down city street)1.0,",
             negative_prompt=
+               "(red)0.5"
                "deformed, distorted, disfigured)1.0,"
                "poorly drawn, bad anatomy, wrong anatomy,"
                "extra limb,missing limb, floating limbs,"
@@ -82,16 +92,14 @@ video = \
                "ugly, disgusting, blurry, amputation,"
            )
         | CompelPromptEncode(tokenizer=pipe.tokenizer, text_encoder=pipe.text_encoder.to('cuda'))
-        | Apply(lambda embeddings: PromptEmbeddings(embeddings=embeddings.embeddings.repeat(48, 1, 1)))
-        | DebugHash(lambda embeddings: embeddings.embeddings)
         > state("embeddings")
         ) >> \
     (Debug("Loading controlnet")
       | VideoLoad([
               f'lineart_out/lineart.mp4',
-          ], device='cuda', video_length=48, width=512, height=288)
-      | VideoShow(fps=16)
-      > cnet
+          ], device='cuda', video_length=state['video_length'], width=512, height=288)
+      - VideoShow(fps=16)
+      > state('controlnet_image')
       ) >> \
     (state \
         | Schedule(scheduler=pipe.scheduler, num_inference_steps=10)
@@ -102,18 +110,37 @@ video = \
         < state('latent')
         ) >> \
     (state['latent']
-        | LoraOn(loras={
-            f"lora/details.safetensors": 0.8,
+        | LatentShow(fps=16, vae=pipe.vae.to('cuda'))
+        - LoraOn(loras={
+            f"{models}/lora/details.safetensors": 0.8,
             }, pipe=pipe)
-        | Loop(state['timesteps'], callback=lambda timestep_index, timestep:
-                  state
-                  | cnet(timestep_index, timestep, controlnet_scale=[1.0])
-                  | unet(timestep_index, timestep)
-                 )
+        | Loop(state['timesteps'], name="Denoise loop", callback=lambda timestep_index, timestep: 
+            (Latent(latent=torch.zeros_like(state['latent'].latent)) > state('noise_predict')) >> \
+            (state
+                | Loop(TileGenerator(Tile(36,64,48), state['latent']), name="Tile loop", callback=lambda *tile:
+                    state 
+                        | cnet(
+                            timestep_index, 
+                            timestep, 
+                            latent=Latent(latent=state['latent'].latent[tile]), 
+                            image=(state['controlnet_image'].chw().float()/255.0)[:,tile[2],:,:,:],
+                            controlnet_scale=[1.0],
+                        ) 
+                        | unet(timestep_index, timestep, latent=Latent(latent=state['latent'].latent[tile]))
+                        > Latent(latent=state['noise_predict'].latent[tile])
+                     
+                  ) | Debug("Tile loop end")
+            ) >> \
+            (state
+               | Step(pipe.scheduler, timestep, state['noise_predict'], state['latent'])
+               - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
+               > state("latent")
+            )       
+        ) 
+        | Debug("Denoise loop end")
         | LoraOff(pipe=pipe)
-        | VaeLatentDecode(vae=pipe.vae.to('cuda'))
-    ) \
-    | VideoShow(fps=16)
+    ) >> \
+    (state['latent'] | VaeLatentDecode(vae=pipe.vae.to('cuda')) | VideoShow(fps=16) )
 ```
 
 * `|`  is pipe (like unix pipe)

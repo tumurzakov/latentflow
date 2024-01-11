@@ -35,6 +35,13 @@ class Latent(Flow):
 
         logging.debug("Latent init %s", self)
 
+    def set(self, value):
+        assert isinstance(value, Latent), "Should be latent"
+
+        logging.debug("Latent set %s %s", self, value)
+
+        self.latent[:] = value.latent
+
     def __str__(self):
         if self.latent is not None:
             shape = self.latent.shape

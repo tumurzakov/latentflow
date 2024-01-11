@@ -52,16 +52,16 @@ class ControlNet(Flow):
         self.guess_mode = self.guess_mode or global_pool_conditions
 
     def set(self, controlnet_video):
-        controlnet_images = controlnet_video.chw().float()/255.0
+        self.controlnet_images = controlnet_video.chw().float()/255.0
 
-        self.controlnet_images = controlnet_images.to(
-                device=self.controlnet.device,
-                dtype=self.controlnet.dtype)
-
-    def __call__(self, timestep_index, timestep, controlnet_scale = 1.0):
+    def __call__(self, timestep_index, timestep, latent, image=None, controlnet_scale = 1.0):
 
         self.timestep_index = timestep_index
         self.timestep = timestep
+        self.latent = latent
+
+        if image is not None:
+            self.controlnet_images = image
 
         self.controlnet_scale = controlnet_scale \
                 if isinstance(controlnet_scale, list) \
@@ -74,15 +74,22 @@ class ControlNet(Flow):
 
         timestep_index = self.timestep_index
         timestep = self.timestep
+        latent = self.latent
 
         timesteps = state['timesteps']
         embeddings = state['embeddings'].embeddings
-        latents = state['latent'].latent
 
+        latents = latent.latent
         latent_model_input = latents.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)
         latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep)
 
+        embeddings = embeddings.repeat(latent_model_input.shape[2], 1, 1)
+
         controlnet_images = self.controlnet_images
+        controlnet_images = controlnet_images.to(
+                device=self.controlnet.device,
+                dtype=self.controlnet.dtype)
+
         controlnet_conditioning_scale = self.controlnet_scale
 
         if isinstance(self.controlnet, MultiControlNetModel) and isinstance(controlnet_conditioning_scale, float):
