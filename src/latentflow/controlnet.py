@@ -90,6 +90,8 @@ class ControlNet(Flow):
                 device=self.controlnet.device,
                 dtype=self.controlnet.dtype)
 
+        logging.debug("ControlNet %s", controlnet_images.shape)
+
         controlnet_conditioning_scale = self.controlnet_scale
 
         if isinstance(self.controlnet, MultiControlNetModel) and isinstance(controlnet_conditioning_scale, float):
