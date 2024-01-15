@@ -1,6 +1,7 @@
 import torch
 import logging
 from compel import Compel
+from einops import rearrange
 
 from .flow import Flow
 from .prompt import Prompt
@@ -23,10 +24,23 @@ class CompelPromptEncode(Flow):
     def apply(self, prompt: Prompt):
         logging.debug(f"CompelPromptEncode apply {prompt}")
 
-        embeddings = self.encode(
-                prompt=prompt.prompt,
-                negative_prompt=prompt.negative_prompt,
-                )
+        if prompt.prompts is not None:
+
+            embeddings = []
+            for i, p in enumerate(prompt.prompts):
+                e = self.encode(
+                        prompt=p.prompt,
+                        negative_prompt=p.negative_prompt,
+                        )
+                embeddings.append(e)
+            embeddings = torch.stack(embeddings)
+            embeddings = rearrange(embeddings, 'f b n c -> (b f) n c')
+
+        else:
+            embeddings = self.encode(
+                    prompt=prompt.prompt,
+                    negative_prompt=prompt.negative_prompt,
+                    )
 
         return PromptEmbeddings(embeddings=embeddings)
 

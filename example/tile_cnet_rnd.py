@@ -1,3 +1,5 @@
+
+
 from latentflow.state import State
 from latentflow.video import Video
 from latentflow.latent import Latent
@@ -25,6 +27,7 @@ from latentflow.controlnet import ControlNet
 from latentflow.loop import Loop
 from latentflow.tile import Tile, TileGenerator
 from latentflow.step import Step
+from latentflow.tensor import Tensor,TensorAdd
 
 import torch
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -52,11 +55,11 @@ state = State({
 
 video = \
     (Debug("Video to video")
-        - VideoLoad(f'input/in.mp4', device='cuda', video_length=state['video_length'])
+        - VideoLoad(f'gdata/input/in.mp4', device='cuda', video_length=state['video_length'])
         - VideoShow(fps=16)
         - VaeVideoEncode(
             vae=pipe.vae.to('cuda'),
-            cache=f'infer/latents.pth',
+            cache=f'gdata/infer/latents.pth',
             video_length=state['video_length'],
             )
         - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
@@ -65,7 +68,7 @@ video = \
             text_encoder=pipe.text_encoder,
             unet=pipe.unet,
             scheduler=pipe.scheduler,
-            cache=f'infer/inv_latents.pth',
+            cache=f'gdata/infer/inv_latents.pth',
             )
         - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
         < state("latent")
@@ -90,13 +93,13 @@ video = \
         ) >> \
     (Debug("Loading controlnet")
       | VideoLoad([
-              f'lineart_out/lineart.mp4',
+              f'gdata/lineart_out/lineart.mp4',
           ], device='cuda', video_length=state['video_length'], width=1024, height=576)
       - VideoShow(fps=16)
       > state('controlnet_image')
       ) >> \
     (state \
-        | Schedule(scheduler=pipe.scheduler, num_inference_steps=8)
+        | Schedule(scheduler=pipe.scheduler, num_inference_steps=20)
         > state('timesteps')
         ) >> \
     (state['latent']
@@ -104,34 +107,53 @@ video = \
         < state('latent')
         ) >> \
     (state['latent']
-        | LatentShow(fps=16, vae=pipe.vae.to('cuda'))
+        - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
         - LoraOn(loras={
             f"{models}/lora/details.safetensors": 0.8,
             }, pipe=pipe)
         | Loop(state['timesteps'], name="Denoise loop", callback=lambda timestep_index, timestep:
             (Latent(latent=torch.zeros_like(state['latent'].latent)) > state('noise_predict')) >> \
             (state
-                | Loop(
+                 | Loop(
                     TileGenerator(
                         Tile(
-                            height=36, height_overlap=18,
-                            width=64, width_overlap=32,
-                            length=48, length_overlap=24,
-                            offset=timestep_index*0,
+                            height=36,
+                            width=64,
+                            length=48,
                             ),
-                        state['latent']
+                        state['latent'],
+                        strategy='random',
+                        random_threshold=0.8,
                     ),
                     name="Tile loop",
                     callback=lambda *tile:
+                        (Tensor(torch.zeros((1,4,48,36,64), device='cuda'))
+                            | TensorAdd(state['latent'].latent[tile])
+                            | Apply(lambda x: Latent(latent=x.tensor))
+                            | Debug("TileLatent")
+                            > state("tile_latent")) >> \
+
+                        (Tensor(torch.zeros((1,48,3,288,512), device='cuda'))
+                            | TensorAdd((state['controlnet_image'].chw().float()/255.0)[:,tile[2],:,scale_slice(tile[3],8),scale_slice(tile[4],8)])
+                            - Debug("TileControlNet", lambda x: x.tensor.shape)
+                            > state("tile_controlnet_image")) >> \
+
                         state
                             | cnet(
                                 timestep_index,
                                 timestep,
-                                latent=Latent(latent=state['latent'].latent[tile]),
-                                image=(state['controlnet_image'].chw().float()/255.0)[:,tile[2],:,scale_slice(tile[3],8),scale_slice(tile[4],8)],
+                                latent=state["tile_latent"],
+                                image=state["tile_controlnet_image"].tensor,
                                 controlnet_scale=[1.0],
                             )
-                            | unet(timestep_index, timestep, latent=Latent(latent=state['latent'].latent[tile]))
+                            | unet(timestep_index, timestep, latent=state['tile_latent'])
+                            | Apply(lambda l: Latent(latent=l.latent[
+                                      0: state['latent'].latent[tile].shape[0],
+                                      0: state['latent'].latent[tile].shape[1],
+                                      0: state['latent'].latent[tile].shape[2],
+                                      0: state['latent'].latent[tile].shape[3],
+                                      0: state['latent'].latent[tile].shape[4],
+                                    ]))
                             > Latent(latent=state['noise_predict'].latent[tile])
 
                   ) | Debug("Tile loop end")

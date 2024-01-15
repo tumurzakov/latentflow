@@ -33,9 +33,15 @@ class Video(Flow):
 
         return f'Video(None)'
 
+    def size(self):
+        return (self.video.shape[2], self.video.shape[3])
+
     def chw(self):
         return rearrange(self.video, 'b f h w c -> b f c h w')
 
     def hwc(self):
         return self.video
+
+    def cnet(self):
+        return self.chw().float()/255.0
 

@@ -1,5 +1,6 @@
 # LatentFlow is a functional-style API for Stable Diffusion
 
+* 2024-01-15 Region prompts added
 * 2024-01-11 Simple tile processing added
 * 2024-01-11 LoRA and ControlNet added
 * 2023-01-10 Initial release
@@ -40,7 +41,7 @@ import torch
 
 
 unet = Unet(
-    unet=pipe.unet.to('cuda'), 
+    unet=pipe.unet.to('cuda'),
     scheduler=pipe.scheduler,
     guidance_scale=10,
 )
@@ -65,9 +66,9 @@ video = \
             )
         - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
         | Invert(
-            tokenizer=pipe.tokenizer, 
-            text_encoder=pipe.text_encoder, 
-            unet=pipe.unet, 
+            tokenizer=pipe.tokenizer,
+            text_encoder=pipe.text_encoder,
+            unet=pipe.unet,
             scheduler=pipe.scheduler,
             cache=f'infer/inv_latents.pth',
             )
@@ -114,29 +115,29 @@ video = \
         - LoraOn(loras={
             f"{models}/lora/details.safetensors": 0.8,
             }, pipe=pipe)
-        | Loop(state['timesteps'], name="Denoise loop", callback=lambda timestep_index, timestep: 
+        | Loop(state['timesteps'], name="Denoise loop", callback=lambda timestep_index, timestep:
             (Latent(latent=torch.zeros_like(state['latent'].latent)) > state('noise_predict')) >> \
             (state
                 | Loop(TileGenerator(Tile(36,64,48), state['latent']), name="Tile loop", callback=lambda *tile:
-                    state 
+                    state
                         | cnet(
-                            timestep_index, 
-                            timestep, 
-                            latent=Latent(latent=state['latent'].latent[tile]), 
+                            timestep_index,
+                            timestep,
+                            latent=Latent(latent=state['latent'].latent[tile]),
                             image=(state['controlnet_image'].chw().float()/255.0)[:,tile[2],:,:,:],
                             controlnet_scale=[1.0],
-                        ) 
+                        )
                         | unet(timestep_index, timestep, latent=Latent(latent=state['latent'].latent[tile]))
                         > Latent(latent=state['noise_predict'].latent[tile])
-                     
+
                   ) | Debug("Tile loop end")
             ) >> \
             (state
                | Step(pipe.scheduler, timestep, state['noise_predict'], state['latent'])
                - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
                > state("latent")
-            )       
-        ) 
+            )
+        )
         | Debug("Denoise loop end")
         | LoraOff(pipe=pipe)
     ) >> \

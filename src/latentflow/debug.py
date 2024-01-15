@@ -5,11 +5,17 @@ import logging
 from .flow import Flow
 
 class Debug(Flow):
-    def __init__(self, comment=""):
+    def __init__(self, comment="", callback=None):
         self.comment = comment
+        self.callback = callback
 
     def apply(self, other):
-        logging.debug('Debug %s %s', self.comment, other)
+        debug = other
+
+        if self.callback is not None:
+            debug = self.callback(debug)
+
+        logging.debug('Debug %s %s', self.comment, debug)
         return other
 
 class DebugHash(Flow):

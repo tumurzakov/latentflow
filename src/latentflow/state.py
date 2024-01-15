@@ -14,16 +14,33 @@ class State(Flow):
         return self
 
     def set(self, value):
+
         if isinstance(self.key, tuple):
             # for simplicity
             assert len(self.key) == 2, "Should contain only two args"
             key = self.key[0]
             idx = self.key[1]
 
-            if key not in self:
-                self[key] = {}
+            logging.debug("State set %s %s", key, idx)
 
-            self[key][str(idx)] = (idx, value)
+            if isinstance(idx, str):
+                if key not in self.state:
+                    self[key] = {}
+
+                self[key][str(idx)] = (idx, value)
+
+                logging.debug("State hash %s %s", key, idx)
+
+            elif isinstance(idx, int):
+                if key not in self.state:
+                    self[key] = []
+
+                if idx >= len(self[key]):
+                    self[key].append(value)
+                else:
+                    self[key][idx] = value
+
+                logging.debug("State list %s %s", key, idx)
 
         elif isinstance(self.key, str):
             self[self.key] = value
@@ -32,7 +49,6 @@ class State(Flow):
             raise TypeError("Not valid type")
 
     def __setitem__(self, key, value):
-        logging.debug("State set %s", key)
         self.state[key] = value
 
     def __getitem__(self, key):

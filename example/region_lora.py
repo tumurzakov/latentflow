@@ -1,6 +1,6 @@
 from latentflow.state import State
 from latentflow.video import Video
-from latentflow.latent import Latent
+from latentflow.latent import Latent, LatentMaskMerge
 from latentflow.tile import Tile
 from latentflow.prompt import Prompt
 from latentflow.vae_video_encode import VaeVideoEncode
@@ -25,6 +25,10 @@ from latentflow.controlnet import ControlNet
 from latentflow.loop import Loop
 from latentflow.tile import Tile, TileGenerator
 from latentflow.step import Step
+from latentflow.tensor import Tensor,TensorAdd
+from latentflow.mask import MaskEncode, Mask
+from latentflow.region import Region
+from latentflow.noop import Noop
 
 import torch
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -45,35 +49,69 @@ cnet = ControlNet(
 )
 
 state = State({
-    'width': 1024,
-    'height': 576,
-    'video_length': 96,
+    'width': 512,
+    'height': 288,
+    'video_length': 48,
 })
 
 video = \
     (Debug("Video to video")
-        - VideoLoad(f'input/in.mp4', device='cuda', video_length=state['video_length'])
+        | VideoLoad(
+            f'data/input/in.mp4',
+            device='cuda',
+            video_length=state['video_length'],
+            width=state['width'],
+            height=state['height'],
+            )
         - VideoShow(fps=16)
-        - VaeVideoEncode(
+        | VaeVideoEncode(
             vae=pipe.vae.to('cuda'),
-            cache=f'infer/latents.pth',
+            cache=f'data/infer/latents.pth',
             video_length=state['video_length'],
             )
         - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
-        - Invert(
+        | Invert(
             tokenizer=pipe.tokenizer,
             text_encoder=pipe.text_encoder,
             unet=pipe.unet,
             scheduler=pipe.scheduler,
-            cache=f'infer/inv_latents.pth',
+            cache=f'data/infer/inv_latents.pth',
             )
         - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
-        < state("latent")
+        > state("latent")
         ) >> \
     (Latent(latent=torch.randn((1,4,state['video_length'],state['height']//8,state['width']//8)), device='cuda')
         | Noise(scheduler=pipe.scheduler)
         - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
-        > state("latent")
+        < state("latent")
+        ) >> \
+    (Debug("Loading mask")
+      | VideoLoad([
+          f'data/masks/mask.mp4',
+        ], device='cuda', video_length=state['video_length'], width=512, height=288)
+      - VideoShow(fps=16)
+      | MaskEncode()
+      > state('woman_mask')
+      ) >> \
+    (Prompt(prompt=
+               "(office)1.0,"
+            negative_prompt=
+               "deformed, distorted, disfigured)1.0,"
+               "poorly drawn, bad anatomy, wrong anatomy,"
+               "extra limb,missing limb, floating limbs,"
+               "(mutated hands and fingers)1.0,"
+               "disconnected limbs, mutation, mutated,"
+               "ugly, disgusting, blurry, amputation,",
+            frames=list(range(0,state['video_length'])),
+           )
+        | CompelPromptEncode(tokenizer=pipe.tokenizer, text_encoder=pipe.text_encoder.to('cuda'))
+        | Region(
+            controlnet_scale=[0.0],
+            loras={
+                f"{models}/lora/details.safetensors": 0.8,
+                }
+        )
+        > state(('regions', 0))
         ) >> \
     (Prompt(prompt=
                "(young woman in haute couture dress)1.0,"
@@ -83,20 +121,28 @@ video = \
                "extra limb,missing limb, floating limbs,"
                "(mutated hands and fingers)1.0,"
                "disconnected limbs, mutation, mutated,"
-               "ugly, disgusting, blurry, amputation,"
+               "ugly, disgusting, blurry, amputation,",
+            frames=list(range(0,state['video_length'])),
            )
         | CompelPromptEncode(tokenizer=pipe.tokenizer, text_encoder=pipe.text_encoder.to('cuda'))
-        > state("embeddings")
+        | Region(
+            controlnet_scale=[1.0],
+            mask=state['woman_mask'],
+            loras={
+                f"{models}/lora/details.safetensors": 0.8,
+                }
+        )
+        > state(("regions", 1))
         ) >> \
     (Debug("Loading controlnet")
       | VideoLoad([
-              f'lineart_out/lineart.mp4',
-          ], device='cuda', video_length=state['video_length'], width=1024, height=576)
+              f'data/lineart_out/lineart.mp4',
+          ], device='cuda', video_length=state['video_length'], width=512, height=288)
       - VideoShow(fps=16)
       > state('controlnet_image')
       ) >> \
     (state \
-        | Schedule(scheduler=pipe.scheduler, num_inference_steps=8)
+        | Schedule(scheduler=pipe.scheduler, num_inference_steps=10)
         > state('timesteps')
         ) >> \
     (state['latent']
@@ -104,38 +150,33 @@ video = \
         < state('latent')
         ) >> \
     (state['latent']
-        | LatentShow(fps=16, vae=pipe.vae.to('cuda'))
+        - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
         - LoraOn(loras={
             f"{models}/lora/details.safetensors": 0.8,
             }, pipe=pipe)
         | Loop(state['timesteps'], name="Denoise loop", callback=lambda timestep_index, timestep:
             (Latent(latent=torch.zeros_like(state['latent'].latent)) > state('noise_predict')) >> \
-            (state
-                | Loop(
-                    TileGenerator(
-                        Tile(
-                            height=36, height_overlap=18,
-                            width=64, width_overlap=32,
-                            length=48, length_overlap=24,
-                            offset=timestep_index*0,
-                            ),
-                        state['latent']
-                    ),
-                    name="Tile loop",
-                    callback=lambda *tile:
-                        state
-                            | cnet(
-                                timestep_index,
-                                timestep,
-                                latent=Latent(latent=state['latent'].latent[tile]),
-                                image=(state['controlnet_image'].chw().float()/255.0)[:,tile[2],:,scale_slice(tile[3],8),scale_slice(tile[4],8)],
-                                controlnet_scale=[1.0],
-                            )
-                            | unet(timestep_index, timestep, latent=Latent(latent=state['latent'].latent[tile]))
-                            > Latent(latent=state['noise_predict'].latent[tile])
-
-                  ) | Debug("Tile loop end")
-            ) >> \
+            (state | Loop(state['regions'], name="Region loop", callback=lambda region:
+                (region|Debug("Region")) >> \
+                state
+                    | LoraOn(loras=region.loras, pipe=pipe)
+                    | cnet(
+                        timestep_index,
+                        timestep,
+                        latent=state['latent'],
+                        image=state["controlnet_image"].chw().float()/255.0,
+                        embeddings=region.embeddings,
+                        controlnet_scale=region.controlnet_scale,
+                    )
+                    | unet(
+                        timestep_index,
+                        timestep,
+                        latent=state['latent'],
+                        embeddings=region.embeddings,
+                    )
+                    | LatentMaskMerge(state['noise_predict'], region.mask)
+                    > state('noise_predict')
+            ) | Debug("End region loop")) >> \
             (state
                | Step(pipe.scheduler, timestep, state['noise_predict'], state['latent'])
                - LatentShow(fps=16, vae=pipe.vae.to('cuda'))
