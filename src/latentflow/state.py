@@ -43,6 +43,7 @@ class State(Flow):
                 logging.debug("State list %s %s", key, idx)
 
         elif isinstance(self.key, str):
+            logging.debug("State set %s %s", self.key, type(value))
             self[self.key] = value
 
         else:

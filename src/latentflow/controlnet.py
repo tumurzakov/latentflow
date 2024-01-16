@@ -61,12 +61,14 @@ class ControlNet(Flow):
             image=None,
             controlnet_scale = 1.0,
             embeddings = None,
+            timesteps = None,
             ):
 
         self.timestep_index = timestep_index
         self.timestep = timestep
         self.latent = latent
         self.embeddings = embeddings
+        self.timesteps = timesteps
 
         if image is not None:
             self.controlnet_images = image
@@ -84,7 +86,7 @@ class ControlNet(Flow):
         timestep = self.timestep
         latent = self.latent
 
-        timesteps = state['timesteps']
+        timesteps = self.timesteps.timesteps
 
         embeddings = self.embeddings.embeddings
 

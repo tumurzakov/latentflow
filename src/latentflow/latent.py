@@ -7,11 +7,7 @@ from .mask import Mask
 class Latent(Flow):
     def __init__(self,
             latent: torch.Tensor=None,
-            batches: int = 1,
-            channels: int = 4,
-            width: int = None,
-            height: int = None,
-            length: int = None,
+            shape: tuple = None,
             device: Optional[Union[str, torch.device]] = None,
             full = None,
             ):
@@ -20,16 +16,10 @@ class Latent(Flow):
 
         if latent is not None:
             assert len(latent.shape) == 5
-            batches, channels, length, height, width = latent.shape
             self.latent = latent
+            shape = latent.shape
 
-        self.batches = batches
-        self.channels = channels
-        self.width = width
-        self.height = height
-        self.length = length
-
-        self.shape = (self.batches,self.channels,self.length, self.height, self.width)
+        self.shape = shape
 
         if self.latent is None:
             if full is not None:
@@ -40,14 +30,30 @@ class Latent(Flow):
         if device is not None:
             self.latent = self.latent.to(device)
 
-        logging.debug("Latent init %s", self)
+        logging.debug("Latent init %s %s", type(self), self)
+
+    def apply(self, value):
+        assert isinstance(value, Latent), "Should be latent"
+
+        logging.debug("Latent apply %s %s", self, value)
+
+        if self.latent is None:
+            self.latent = value.latent
+        else:
+            self.latent[:] = value.latent
+
+        return self
 
     def set(self, value):
         assert isinstance(value, Latent), "Should be latent"
 
         logging.debug("Latent set %s %s", self, value)
 
-        self.latent[:] = value.latent
+        if self.latent is None:
+            self.latent = value.latent
+        else:
+            self.latent[:] = value.latent
+
 
     def __str__(self):
         if self.latent is not None:
@@ -57,6 +63,9 @@ class Latent(Flow):
             return f'Latent({shape}, {device}, {dtype})'
 
         return f'Latent(None)'
+
+class NoisePredict(Latent):
+    pass
 
 class LatentMaskMerge(Flow):
     def __init__(self, latent: Latent, mask: Mask = None):

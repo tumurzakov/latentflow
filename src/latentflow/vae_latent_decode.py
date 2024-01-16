@@ -32,21 +32,20 @@ class VaeLatentDecode(LatentDecode):
         return video
 
     def decode(self, latents):
-      video_length = latents.shape[2]
-      latents = 1 / 0.18215 * latents
-      latents = rearrange(latents, "b c f h w -> (b f) c h w")
+        video_length = latents.shape[2]
+        latents = latents.to(device=self.vae.device, dtype=self.vae.dtype)
+        latents = 1 / 0.18215 * latents
+        latents = rearrange(latents, "b c f h w -> (b f) c h w")
 
-      video = []
-      for frame_idx in range(0, latents.shape[0], self.vae_batch):
-          video.append(self.vae.decode(
-              latents[frame_idx:frame_idx+self.vae_batch].to(self.vae.device)
-              ).sample)
+        video = []
+        for frame_idx in range(0, latents.shape[0], self.vae_batch):
+            video.append(self.vae.decode(
+                latents[frame_idx:frame_idx+self.vae_batch]
+                ).sample)
 
-      video = torch.cat(video)
-      video = rearrange(video, "(b f) c h w -> b f h w c", f=video_length)
-      video = (video / 2 + 0.5).clamp(0, 1)
-      video = video.float()
+        video = torch.cat(video)
+        video = rearrange(video, "(b f) c h w -> b f h w c", f=video_length)
+        video = (video / 2 + 0.5).clamp(0, 1)
+        video = video.float()
 
-      return video
-
-
+        return video

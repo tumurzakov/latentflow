@@ -3,26 +3,40 @@ import logging
 
 from .flow import Flow
 from .state import State
+from .debug import tensor_hash
+from .latent import NoisePredict
+
 
 class Step(Flow):
-    def __init__(self, scheduler, timestep, noise_predict, latent):
+    def __init__(self,
+            scheduler,
+            timestep,
+            noise_predict=None,
+            latent=None,
+            ):
         self.scheduler = scheduler
         self.timestep = timestep
         self.noise_predict = noise_predict
         self.latent = latent
 
-        logging.debug("Step init")
+        logging.debug("Step init %s %s %s",
+                timestep, noise_predict, latent)
 
-    def apply(self, other) -> State:
+    def apply(self, noise_predict: NoisePredict):
+        latent_model_input = self.latent.latent
+
+        if noise_predict is None and isinstance(noise_predict, NoisePredict):
+            noise_predict = self.noise_predict
 
         # compute the previous noisy sample x_t -> x_t-1
         self.latent.latent[:] = self.scheduler.step(
-                self.noise_predict.latent,
+                noise_predict.latent,
                 self.timestep,
-                self.latent.latent,
+                latent_model_input,
                 ).prev_sample
 
-        logging.debug("Step apply %s", self.latent)
+        logging.debug("Step apply %s %s %s",
+                self.timestep, noise_predict, self.latent)
 
         return self.latent
 

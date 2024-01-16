@@ -14,6 +14,10 @@ class Timesteps(Flow):
         logging.debug(f'{self}')
         self._index = 0
 
+    def set(self, timesteps):
+        self.timesteps = timesteps.timesteps
+        return self
+
     def __len__(self):
         return len(self.timesteps) if self.timesteps is not None else 0
 
@@ -26,7 +30,7 @@ class Timesteps(Flow):
 
     def __next__(self):
         if self._index < len(self.timesteps):
-            result = (self._index, self.timesteps[self._index])
+            result = self.timesteps[self._index]
             self._index += 1
             return result
         else:

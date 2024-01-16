@@ -21,6 +21,7 @@ class Noise(Flow):
         latents = latent.latent
         latents = torch.randn_like(latents).to(self.device)
         latents = latents * self.scheduler.init_noise_sigma
+        latents = latents.to(self.device)
         latent.latent = latents
 
         logging.debug('Noise apply noised %s', latent)

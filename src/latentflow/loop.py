@@ -18,6 +18,7 @@ class Loop(Flow):
 
         self.callback = callback
         self.name = name
+        self.index = 0
 
         logging.debug("Loop init %s %s", self.name, type(self.collection))
 
@@ -26,13 +27,13 @@ class Loop(Flow):
 
         try:
             item = next(self.collection)
-            item = item if isinstance(item, tuple) else (item,)
 
-            logging.debug("Loop apply %s %s", self.name, item)
+            logging.debug("Loop apply %s %s %s", self.name, self.index, item)
 
             if self.callback is not None:
-                result = self.callback(*item)
+                result = self.callback(self.index, item)
 
+            self.index += 1
             return self.apply(result)
 
         except StopIteration:
