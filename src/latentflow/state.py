@@ -36,9 +36,10 @@ class State(Flow):
                     self[key] = []
 
                 if idx >= len(self[key]):
-                    self[key].append(value)
-                else:
-                    self[key][idx] = value
+                    for i in range(len(self[key]), idx+1):
+                        self[key].append(None)
+
+                self[key][idx] = value
 
                 logging.debug("State list %s %s", key, idx)
 

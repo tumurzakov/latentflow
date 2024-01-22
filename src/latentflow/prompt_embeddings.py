@@ -8,6 +8,10 @@ class PromptEmbeddings(Flow):
         self.embeddings = embeddings
         logging.debug(f"PromptEmbeddings init {self}")
 
+    def slice(self, l):
+        logging.debug(f"PromptEmbeddings slice {l}")
+        return PromptEmbeddings(self.embeddings[l, :, :])
+
     def __str__(self):
         if self.embeddings is not None:
             shape = self.embeddings.shape

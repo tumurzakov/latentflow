@@ -6,9 +6,13 @@ from .flow import Flow
 class Tensor(Flow):
     def __init__(self, tensor):
         self.tensor = tensor
+        self.shape = tensor.shape
 
     def apply(self, other):
         return self
+
+    def __str__(self):
+        return f'Tensor({self.tensor.shape})'
 
 class TensorAdd(Flow):
     def __init__(self, tensor: torch.Tensor):

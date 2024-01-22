@@ -1,8 +1,9 @@
 import logging
 import torch
 from typing import List, Optional, Tuple, Union, Generator
+import torch.nn.functional as F
 from .flow import Flow
-from .mask import Mask
+from .tensor import Tensor
 
 class Latent(Flow):
     def __init__(self,
@@ -18,13 +19,15 @@ class Latent(Flow):
             assert len(latent.shape) == 5
             self.latent = latent
             shape = latent.shape
+            device = latent.device
 
         self.shape = shape
+        self.device = device
 
         if self.latent is None:
             if full is not None:
                 self.latent = torch.full(self.shape, full)
-            else:
+            elif self.shape is not None:
                 self.latent = torch.randn(self.shape)
 
         if device is not None:
@@ -32,27 +35,41 @@ class Latent(Flow):
 
         logging.debug("Latent init %s %s", type(self), self)
 
+    def clone(self):
+        return type(self)(self.latent.clone())
+
     def apply(self, value):
-        assert isinstance(value, Latent), "Should be latent"
-
         logging.debug("Latent apply %s %s", self, value)
-
-        if self.latent is None:
-            self.latent = value.latent
-        else:
-            self.latent[:] = value.latent
-
+        self.set(value)
         return self
 
+    def resize(self, size):
+        l = F.interpolate(
+                self.latent,
+                size=size,
+                mode='trilinear',
+                align_corners=False
+                )
+        return Latent(l)
+
     def set(self, value):
-        assert isinstance(value, Latent), "Should be latent"
+        assert isinstance(value, Latent) \
+            or isinstance(value, Tensor) \
+            or isinstance(value, torch.Tensor) \
+            , f"Should be latent {type(value)}"
 
         logging.debug("Latent set %s %s", self, value)
 
+        tensor = value
+        if isinstance(value, Latent):
+            tensor = value.latent
+        elif isinstance(value, Tensor):
+            tensor = value.tensor
+
         if self.latent is None:
-            self.latent = value.latent
+            self.latent = tensor
         else:
-            self.latent[:] = value.latent
+            self.latent[:] = tensor
 
 
     def __str__(self):
@@ -67,13 +84,26 @@ class Latent(Flow):
 class NoisePredict(Latent):
     pass
 
-class LatentMaskMerge(Flow):
-    def __init__(self, latent: Latent, mask: Mask = None):
+class LatentAdd(Flow):
+    def __init__(self, latent):
         self.latent = latent
 
-        self.mask = mask
-        if self.mask is None:
-            self.mask = Mask(torch.ones_like(self.latent.latent))
+    def apply(self, other):
 
-    def apply(self, latent: Latent) -> Latent:
-        return Latent(self.latent.latent * (1 - self.mask.mask) + latent.latent * self.mask.mask)
+        s = self.latent.latent
+        l = other.latent
+
+        t = (
+            slice(0, s.shape[0]),
+            slice(0, s.shape[1]),
+            slice(0, s.shape[2]),
+            slice(0, s.shape[3]),
+            slice(0, s.shape[4]),
+        )
+
+        logging.debug("LatentAdd apply %s %s %s", self.latent, other, t)
+
+        s[t] += l[t]
+
+        return self.latent
+

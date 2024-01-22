@@ -3,6 +3,7 @@ import logging
 import random
 
 from .latent import Latent
+from .tensor import Tensor
 
 class Tile:
     def __init__(self,
@@ -12,6 +13,7 @@ class Tile:
             width_overlap:int=0,
             height_overlap:int=0,
             length_overlap:int=0,
+            length_offset:int=0,
             offset:int=0
             ):
 
@@ -35,15 +37,22 @@ class Tile:
         logging.debug(f'{self}')
 
     def __str__(self):
-        return "Tile(%s-%s %s-%s %s-%s, %s)" % (
-                self.width, self.width_overlap,
-                self.height, self.height_overlap,
+        return "Tile(l%s->%s h%s->%s w%s->%s, %s)" % (
                 self.length, self.length_overlap,
+                self.height, self.height_overlap,
+                self.width, self.width_overlap,
                 self.offset
                 )
 
 class TileGenerator:
-    def __init__(self, tile: Tile, latent: Latent, strategy='simple', *args, **kwargs):
+    def __init__(self,
+            tile: Tile,
+            latent: Latent,
+            strategy='simple',
+            do_classifier_free_guidance=True,
+            *args,
+            **kwargs):
+
         logging.debug("TileGenerator init %s %s", tile, latent)
 
         self.tile = tile
@@ -53,10 +62,26 @@ class TileGenerator:
 
         self.audit = torch.zeros_like(latent.latent).int()
 
+        self.do_classifier_free_guidance = do_classifier_free_guidance
+
         if strategy == 'random':
-            self.simple(self.tile)
+            self.simple(Tile(
+                length=self.tile.length,
+                height=self.tile.height,
+                width=self.tile.width,
+                # no overlap and offset
+                ))
             self.audit = torch.zeros_like(latent.latent).int()
             self.random(self.tile, *args, **kwargs)
+        elif strategy == 'simple' and self.tile.offset > 0:
+            self.simple(Tile(
+                length=self.tile.length,
+                height=self.tile.height,
+                width=self.tile.width,
+                # no overlap and offset
+                ))
+            self.audit = torch.zeros_like(latent.latent).int()
+            self.simple(self.tile)
         else:
             self.simple(self.tile)
 
@@ -66,17 +91,18 @@ class TileGenerator:
         logging.debug("TileGenerator tiles [%s] cover=%s",
                 len(self.tiles), self.cover.item())
 
-    def append_tile(self, b1, b2, c1, c2, l1, l2, h1, h2, w1, w2):
-        tile = (
-                slice(b1, b2),
-                slice(c1, c2),
-                slice(l1, l2),
-                slice(h1, h2),
-                slice(w1, w2),
-                )
-
+    def append_tile(self, tile):
         if self.audit[tile].numel() > 0 \
             and self.audit[tile].sum() != self.audit[tile].numel():
+
+            if self.do_classifier_free_guidance:
+                tile = (
+                        slice(tile[0].start*2, tile[0].stop*2),
+                        tile[1],
+                        tile[2],
+                        tile[3],
+                        tile[4],
+                        )
 
             self.tiles.append(tile)
             self.audit[tile] = 1
@@ -85,6 +111,7 @@ class TileGenerator:
         logging.debug("TileGenerator random %s %s", tile, random_threshold)
 
         shape = self.latent.latent.shape
+        length = shape[2]
 
         cnt = 0
 
@@ -93,22 +120,21 @@ class TileGenerator:
         while True:
             b = random.randrange(shape[0])
             l = random.randrange(shape[2])
-            h = random.randrange(shape[3])
-            w = random.randrange(shape[4])
+            h = random.randrange(shape[3]-tile.height)
+            w = random.randrange(shape[4]-tile.width)
             t = (
-                    slice(b, b + 1),
-                    slice(0, 4),
-                    slice(l, l+self.tile.length),
-                    slice(h, h+self.tile.height),
-                    slice(w, w+self.tile.width),
-                    )
+                slice(b, b + 1),
+                slice(0, 4),
+                [x%length for x in range(l, l+self.tile.length)],
+                slice(h, h+self.tile.height),
+                slice(w, w+self.tile.width),
+                )
 
             tile_sum = self.audit[t].sum()
             tile_numel = self.audit[t].numel()
 
             if tile_numel > 0 and tile_numel - tile_sum > random_min_pixel_count:
-                self.tiles.append(t)
-                self.audit[t] = 1
+                self.append_tile(t)
 
             audit_sum = self.audit.sum().item()
 
@@ -124,68 +150,68 @@ class TileGenerator:
 
         shape = self.latent.latent.shape
 
-        for offset in [tile.offset, 0]:
+        offset = tile.offset
 
-            for b in range(0, shape[0]):
+        for b in range(0, shape[0]):
 
-                l_start = offset
-                l_end = tile.length + offset
+            l_start = offset
+            l_end = tile.length + offset
 
-                while l_start <= shape[2]:
+            while l_start <= shape[2]:
 
-                    h_start = offset
-                    h_end = tile.height + offset
+                h_start = offset
+                h_end = tile.height + offset
 
-                    while h_start <= shape[3]:
+                while h_start <= shape[3]:
 
-                        w_start = offset
-                        w_end = tile.width + offset
+                    w_start = offset
+                    w_end = tile.width + offset
 
-                        while w_start <= shape[4]:
+                    while w_start <= shape[4]:
 
-                            self.append_tile(
-                                b, b + 1,
-                                0, 4,
-                                l_start, l_end,
-                                h_start, h_end,
-                                w_start, w_end,
-                                )
+                        self.append_tile((
+                            slice(b, b + 1),
+                            slice(0, 4),
+                            slice(l_start, l_end),
+                            slice(h_start, h_end),
+                            slice(w_start, w_end),
+                            ))
 
-                            w_start += tile.width_overlap
-                            w_end += tile.width_overlap
+                        w_start += tile.width_overlap
+                        w_end += tile.width_overlap
 
-                        if w_start < shape[4] and w_end > shape[4]:
-                            self.append_tile(
-                                b, b + 1,
-                                0, 4,
-                                l_start, l_end,
-                                h_start, h_end,
-                                w_start, w_end,
-                                )
+                    if w_start < shape[4] and w_end > shape[4]:
+                        self.append_tile((
+                            slice(b, b + 1),
+                            slice(0, 4),
+                            slice(l_start, l_end),
+                            slice(h_start, h_end),
+                            slice(w_start, w_end),
+                            ))
 
-                        h_start += tile.height_overlap
-                        h_end += tile.height_overlap
+                    h_start += tile.height_overlap
+                    h_end += tile.height_overlap
 
-                    if h_start < shape[3] and h_end > shape[3]:
-                        self.append_tile(
-                            b, b + 1,
-                            0, 4,
-                            l_start, l_end,
-                            h_start, h_end,
-                            w_start, w_end,
-                            )
+                if h_start < shape[3] and h_end > shape[3]:
+                    self.append_tile((
+                        slice(b, b + 1),
+                        slice(0, 4),
+                        slice(l_start, l_end),
+                        slice(h_start, h_end),
+                        slice(w_start, w_end),
+                        ))
 
-                    l_start += tile.length_overlap
-                    l_end += tile.length_overlap
+                l_start += tile.length_overlap
+                l_end += tile.length_overlap
 
-                if l_start < shape[2] and l_end > shape[2]:
-                    self.append_tile(
-                        b, b + 1,
-                        0, 4,
-                        l_start, l_end,
-                        h_start, h_end,
-                        w_start, w_end,
-                        )
+            if l_start < shape[2] and l_end > shape[2]:
+                self.append_tile((
+                    (b, b + 1),
+                    (0, 4),
+                    (l_start, l_end),
+                    (h_start, h_end),
+                    (w_start, w_end),
+                    ))
 
         logging.info("GenerateTiles simple %s", len(self.tiles))
 

@@ -9,6 +9,14 @@ from diffusers.models import AutoencoderKL, ControlNetModel
 from typing import Callable, List, Optional, Tuple, Union, Generator
 
 from .flow import Flow
+from .latent import Latent
+
+class ControlNetLatent(Latent):
+    def __init__(self, latent, down_block_res_samples, mid_block_res_sample):
+        super().__init__(latent.latent)
+
+        self.down_block_res_samples = down_block_res_samples
+        self.mid_block_res_sample = mid_block_res_sample
 
 class ControlNet(Flow):
     def __init__(self,
@@ -57,18 +65,18 @@ class ControlNet(Flow):
     def __call__(self,
             timestep_index,
             timestep,
-            latent,
+            latent=None,
             image=None,
+            timesteps=None,
             controlnet_scale = 1.0,
             embeddings = None,
-            timesteps = None,
             ):
 
         self.timestep_index = timestep_index
         self.timestep = timestep
+        self.timesteps = timesteps
         self.latent = latent
         self.embeddings = embeddings
-        self.timesteps = timesteps
 
         if image is not None:
             self.controlnet_images = image
@@ -80,18 +88,18 @@ class ControlNet(Flow):
         return self
 
     @torch.no_grad()
-    def apply(self, state):
+    def apply(self, latent):
+
+        if self.latent is not None:
+            latent = self.latent
 
         timestep_index = self.timestep_index
         timestep = self.timestep
-        latent = self.latent
-
-        timesteps = self.timesteps.timesteps
+        timesteps = self.timesteps
 
         embeddings = self.embeddings.embeddings
 
-        latents = latent.latent
-        latent_model_input = latents.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)
+        latent_model_input = latent.latent
         latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep)
 
         controlnet_images = self.controlnet_images
@@ -106,7 +114,7 @@ class ControlNet(Flow):
         if isinstance(self.controlnet, MultiControlNetModel) and isinstance(controlnet_conditioning_scale, float):
             controlnet_conditioning_scale = [controlnet_conditioning_scale] * len(self.controlnet.nets)
 
-        temporal_context = latents.shape[2]
+        temporal_context = latent_model_input.shape[2]
 
         controlnet_keep = []
         for i in range(len(timesteps)):
@@ -129,10 +137,7 @@ class ControlNet(Flow):
                 self.do_classifier_free_guidance,
                 )
 
-        state['down_block_res_samples'] = down_block_res_samples
-        state['mid_block_res_sample'] = mid_block_res_sample
-
-        return state
+        return ControlNetLatent(latent, down_block_res_samples, mid_block_res_sample)
 
     @torch.no_grad()
     def calc_cnet_residuals(

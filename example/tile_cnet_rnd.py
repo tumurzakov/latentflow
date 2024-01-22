@@ -79,7 +79,7 @@ video = \
         > state("latent")
         ) >> \
     (Prompt(prompt=
-               "(young woman in haute couture dress)1.0,"
+               "(young woman in haute couture dress)1.0,",
             negative_prompt=
                "deformed, distorted, disfigured)1.0,"
                "poorly drawn, bad anatomy, wrong anatomy,"

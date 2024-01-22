@@ -6,31 +6,27 @@ from .latent import Latent, NoisePredict
 from .prompt_embeddings import PromptEmbeddings
 from .state import State
 from .debug import tensor_hash
+from .tensor import Tensor
+from .controlnet import ControlNetLatent
 
 class Unet(Flow):
     def __init__(self,
             unet,
             scheduler,
-            guidance_scale=7.5,
-            do_classifier_free_guidance = True,
             fp16 = False,
             ):
 
         self.unet = unet
         self.scheduler = scheduler
-        self.guidance_scale = guidance_scale
-        self.do_classifier_free_guidance = do_classifier_free_guidance
         self.fp16 = fp16
 
         logging.debug("Unet init %s %s fp16=%s", unet.device, unet.dtype, self.fp16)
-        logging.debug("Unet init %s %s", guidance_scale, do_classifier_free_guidance)
         logging.debug("Unet init %s", type(scheduler))
 
     def __call__(self,
             timestep,
-            latent,
-            embeddings,
-            guidance_scale=None,
+            latent=None,
+            embeddings=None,
             scheduler=None,
             ):
 
@@ -38,31 +34,35 @@ class Unet(Flow):
         self.latent = latent
         self.embeddings = embeddings
 
+        assert embeddings is not None
+
         if scheduler is not None:
             self.scheduler = scheduler
 
-        if guidance_scale is not None:
-            self.guidance_scale = guidance_scale
-
-        logging.debug("Unet set %s %s %s %s",
+        logging.debug("Unet set %s %s %s",
                 self.timestep, self.latent,
-                self.embeddings, self.guidance_scale)
+                self.embeddings,
+                )
 
         return self
 
-
     @torch.no_grad()
-    def apply(self, state: State):
+    def apply(self, latent):
+
+        if self.latent is not None:
+            latent = self.latent
 
         timestep = self.timestep
-        latent = self.latent
         embeddings = self.embeddings
 
-        down_block_res_samples = state['down_block_res_samples']
-        mid_block_res_sample = state['mid_block_res_sample']
+        down_block_res_samples = None
+        mid_block_res_sample = None
+        if isinstance(latent, ControlNetLatent):
+            down_block_res_samples = latent.down_block_res_samples
+            mid_block_res_sample = latent.mid_block_res_sample
 
-        logging.debug("Unet apply %s %s %s %s",
-                timestep, latent, embeddings, self.guidance_scale,
+        logging.debug("Unet apply %s %s %s",
+                timestep, latent, embeddings,
                 )
 
         logging.debug("Unet apply cnet %s %s",
@@ -72,7 +72,6 @@ class Unet(Flow):
 
         latents = latent.latent
         latent_model_input = latents
-        latent_model_input = latent_model_input.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)
         latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep)
 
         embeddings = embeddings.embeddings.to(self.unet.device, dtype=self.unet.dtype)
@@ -86,9 +85,31 @@ class Unet(Flow):
                     mid_block_additional_residual=mid_block_res_sample,
                     ).sample.to(device=latents.device, dtype=latents.dtype)
 
-        # perform guidance
-        if self.do_classifier_free_guidance:
-            noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-            noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
-
         return NoisePredict(latent=noise_pred)
+
+class CFGPrepare(Flow):
+    def __init__(self,
+            do_classifier_free_guidance=True,
+            guidance_scale=7.5,
+            ):
+        self.do_classifier_free_guidance=do_classifier_free_guidance
+        self.guidance_scale=guidance_scale
+
+    def apply(self, latent):
+        latent_model_input = latent.latent
+        latent_model_input = latent_model_input.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)
+        return Latent(latent_model_input)
+
+class CFGProcess(Flow):
+    def __init__(self,
+            do_classifier_free_guidance=True,
+            guidance_scale=7.5,
+            ):
+        self.do_classifier_free_guidance=do_classifier_free_guidance
+        self.guidance_scale=guidance_scale
+
+    def apply(self, noise_predict):
+        noise_pred =  noise_predict.latent
+        noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+        noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
+        return NoisePredict(noise_pred)

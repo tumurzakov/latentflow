@@ -10,22 +10,19 @@ from .state import State
 class AddNoise(Flow):
     def __init__(self,
             scheduler:Optional[SchedulerInput]=None,
-            device: Optional[Union[str, torch.device]] = None,
+            timestep = None,
             ):
         self.scheduler = scheduler
-        self.device = device
+        self.timestep = timestep
 
-        logging.debug('AddNoise init %s', self.device)
+        logging.debug('AddNoise init')
 
-    def apply(self, state: State) -> Latent:
-        latent = state['latent']
-        timesteps = state['timesteps']
 
-        logging.debug('AddNoise apply %s %s', latent, timesteps)
+    def apply(self, latent) -> Latent:
+        logging.debug('AddNoise apply %s %s', latent, self.timestep)
 
         noise = torch.randn_like(latent.latent)
-        timestep = timesteps.timesteps[:1]
-        latent = self.scheduler.add_noise(latent.latent, noise, timestep)
+        latent = self.scheduler.add_noise(latent.latent, noise, self.timestep)
 
         latent = Latent(latent=latent)
         logging.debug('AddNoise apply noised %s', latent)

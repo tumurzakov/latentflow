@@ -28,7 +28,7 @@ class Region(Flow):
         self.guidance_scale = guidance_scale
         self.source_latent = source_latent
         self.latent = latent
-        self.noise_predict = NoisePredict()
+        self.noise_predict = NoisePredict(shape=latent.shape, device=latent.device)
         self.timesteps = Timesteps()
 
     def apply(self, embeddings: PromptEmbeddings):

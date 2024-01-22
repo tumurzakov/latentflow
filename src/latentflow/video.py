@@ -1,6 +1,7 @@
 import torch
 from einops import rearrange
 from typing import List, Optional, Tuple, Union, Generator
+import torch.nn.functional as F
 from .flow import Flow
 
 import logging
@@ -35,6 +36,18 @@ class Video(Flow):
 
     def size(self):
         return (self.video.shape[2], self.video.shape[3])
+
+    def resize(self, size):
+        v = self.chw().float()
+        v = rearrange(v, 'b f c h w -> b c f h w')
+        v = F.interpolate(
+                v,
+                size=size,
+                mode='trilinear',
+                align_corners=False
+                )
+        v = rearrange(v, 'b c f h w -> b f c h w')
+        return Video('CHW', video=v.to(torch.uint8))
 
     def chw(self):
         return rearrange(self.video, 'b f h w c -> b f c h w')

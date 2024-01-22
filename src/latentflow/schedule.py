@@ -25,7 +25,7 @@ class Schedule(Flow):
             strength:Optional[float] = None,
             num_inference_steps: Optional[int] = None,
             device: Optional[Union[str, torch.device]] = None,
-            ) -> State:
+            ):
 
         self.scheduler = scheduler
         self.strength = strength

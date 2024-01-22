@@ -41,7 +41,7 @@ class VideoLoad(Flow):
             video_length = self.video_length
             if video_length is None:
                 video_length = len(vr)
-            sample_index = list(range(self.start_frame, video_length))
+            sample_index = list(range(self.start_frame, self.start_frame + video_length))
             video = vr.get_batch(sample_index)
 
             if self.device is not None:
@@ -51,5 +51,10 @@ class VideoLoad(Flow):
 
         videos = torch.stack(videos)
 
-        return Video('HWC', video=videos)
+        video = Video('HWC', video=videos)
+
+        logging.debug('VideoLoad apply %s', video)
+
+        return video
+
 
