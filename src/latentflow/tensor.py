@@ -11,6 +11,13 @@ class Tensor(Flow):
     def apply(self, other):
         return self
 
+    def save(self, path):
+        torch.save(self.tensor, path)
+        return self
+
+    def load(self, path, device='cpu'):
+        return Tensor(torch.load(path).to(device))
+
     def __str__(self):
         return f'Tensor({self.tensor.shape})'
 

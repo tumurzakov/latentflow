@@ -13,6 +13,10 @@ class State(Flow):
         self.key = args[0]
         return self
 
+    def update(self, state):
+        self.state.update(state)
+        return self
+
     def set(self, value):
 
         if isinstance(self.key, tuple):

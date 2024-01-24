@@ -11,11 +11,9 @@ class Flow:
         return other.apply(self)
 
     def __sub__(self, other):
-        logging.debug('Flow pipe bypass %s.apply(%s)', type(other), type(self))
         return self
 
     def __lt__(self, other):
-        logging.debug('Flow set bypass %s.set(%s)', type(other), type(self))
         return self
 
     def __gt__(self, other):

@@ -35,6 +35,13 @@ class Latent(Flow):
 
         logging.debug("Latent init %s %s", type(self), self)
 
+    def save(self, path):
+        torch.save(self.latent, path)
+        return self
+
+    def load(self, path, device='cpu'):
+        return Latent(torch.load(path).to(device))
+
     def clone(self):
         return type(self)(self.latent.clone())
 
@@ -89,6 +96,7 @@ class LatentAdd(Flow):
         self.latent = latent
 
     def apply(self, other):
+        logging.debug("LatentAdd.apply %s %s", self.latent, other)
 
         s = self.latent.latent
         l = other.latent

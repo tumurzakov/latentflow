@@ -55,6 +55,8 @@ class Invert(Flow):
     @torch.no_grad()
     def invert(self, latents: torch.Tensor) -> Latent:
 
+        latents = latents.to(device=self.unet.device, dtype=self.unet.dtype)
+
         if self.video_length is None:
             self.video_length = latents.shape[2]
 

@@ -1,0 +1,172 @@
+from einops import rearrange
+
+from latentflow.state import State
+from latentflow.video import Video
+from latentflow.latent import Latent, LatentAdd, NoisePredict
+from latentflow.tile import Tile
+from latentflow.prompt import Prompt
+from latentflow.vae_video_encode import VaeVideoEncode
+from latentflow.vae_latent_decode import VaeLatentDecode
+from latentflow.diffuse import Diffuse
+from latentflow.unet import Unet, CFGPrepare, CFGProcess
+from latentflow.prompt_embeddings import PromptEmbeddings
+from latentflow.a1111_prompt_encode import A1111PromptEncode
+from latentflow.compel_prompt_encode import CompelPromptEncode
+from latentflow.video_load import VideoLoad
+from latentflow.video_show import VideoShow
+from latentflow.latent_show import LatentShow
+from latentflow.noise import Noise
+from latentflow.add_noise import AddNoise
+from latentflow.schedule import Schedule
+from latentflow.debug import Debug, DebugHash
+from latentflow.invert import Invert
+from latentflow.bypass import Bypass
+from latentflow.lora import LoraOn, LoraOff
+from latentflow.apply import Apply
+from latentflow.controlnet import ControlNet
+from latentflow.loop import Loop
+from latentflow.tile import Tile, TileGenerator
+from latentflow.step import Step
+from latentflow.tensor import Tensor,TensorAdd
+from latentflow.mask import MaskEncode, Mask, LatentMaskCut, VideoMaskCut, LatentMaskMerge, LatentMaskCrop
+from latentflow.region import Region
+from latentflow.noop import Noop
+from latentflow.video_vae_latent_decode import VideoVaeLatentDecode
+from latentflow.interpolate import Interpolate
+from latentflow.flow import If, Set
+from latentflow.nn_latent_upscale import NNLatentUpscale
+from latentflow.slice import slice_scale
+from latentflow.ip_adapter_prompt_encode import IPAdapterPromptEncode
+
+import torch
+torch.backends.cuda.matmul.allow_tf32 = True
+
+unet = Unet(
+    unet=pipe.unet.to('cuda'),
+    scheduler=pipe.scheduler,
+    fp16=True,
+)
+
+cnet = ControlNet(
+    controlnet=pipe.controlnet.to('cuda'),
+    scheduler=pipe.scheduler,
+)
+
+state = State({
+    'width': 512,
+    'height': 288,
+    'video_length': 48,
+    'vae_batch': 12,
+    'num_inference_steps': 10,
+    'guidance_scale': 10,
+    'start_frame': 19,
+    'fps': 16,
+})
+
+video = \
+    (Debug("Video to video")
+        | VideoLoad(
+            f'{data}/input/in.mp4', 
+            device='cuda', 
+            video_length=state['video_length'], 
+            start_frame=state['start_frame'], 
+            width=state['width'],
+            height=state['height'],
+        )
+        | Set(state, 'input_video')
+        - VideoShow(fps=state['fps'])
+        | VaeVideoEncode(
+            vae=pipe.vae.to('cuda'),
+            cache=f'{data}/infer/latents.pth',
+            video_length=state['video_length'],
+            )
+        - LatentShow(fps=state['fps'], vae=pipe.vae.to('cuda'))
+        | Invert(
+            tokenizer=pipe.tokenizer,
+            text_encoder=pipe.text_encoder,
+            unet=pipe.unet,
+            scheduler=pipe.scheduler,
+            cache=f'{data}/infer/inv_latents.pth',
+            temporal_context=state['video_length'],
+            )
+        - LatentShow(fps=state['fps'], vae=vae, vae_batch=state['vae_batch'])
+        > state("latent")
+        ) >> \
+    (Latent(shape=(1,4,state['video_length'],state['height']//8,state['width']//8), device='cuda')
+        | Noise(scheduler=pipe.scheduler, device='cuda')
+        - LatentShow(fps=state['fps'], vae=vae, vae_batch=state['vae_batch'])
+        > state("latent")
+        ) >> \
+    (Prompt(
+            prompt=
+               "(young woman in haute couture dress)1.0,"
+               "(woman sits behind table)1.2,"
+               "(office employees working behind)1.0,"
+               "cyberpunk, fantasy, sci-fi, stunning, concept, artstation, acid colors,"
+               "octane render, Unreal engine, cg unity, hdr, wallpaper, neonpunkai, lineart,",
+            negative_prompt=
+               "deformed, distorted, disfigured)1.0,"
+               "poorly drawn, bad anatomy, wrong anatomy,"
+               "extra limb,missing limb, floating limbs,"
+               "(mutated hands and fingers)1.0,"
+               "disconnected limbs, mutation, mutated,"
+               "ugly, disgusting, blurry, amputation,",
+            image=state['input_video'].chw()[0],
+            frames=list(range(0,state['video_length'])),
+        )
+        | IPAdapterPromptEncode(ip_adapter)
+        > state("embeddings")
+        ) >> \
+    (Debug("Loading controlnet")
+        | VideoLoad(
+            [
+                f'{data}/lineart_out/lineart.mp4',
+            ], 
+            device='cuda', 
+            video_length=state['video_length'], 
+            width=state['width'], 
+            height=state['height'], 
+            start_frame=state['start_frame'],
+        )
+        - VideoShow(fps=state['fps'])
+        > state('controlnet_image')
+        ) >> \
+    (state \
+        | Schedule(scheduler=pipe.scheduler, num_inference_steps=state['num_inference_steps'])
+        > state('timesteps')
+        ) >> \
+    (state['latent']
+        - LatentShow(fps=state['fps'], vae=vae)
+        - LoraOn(loras={
+            f"{models}/lora/details.safetensors": 0.8,
+            f"{models}/lora/phblue.safetensors": 0.5,
+            f"{models}/lora/Neonpunkai.safetensors": 0.8,
+            f"{models}/lora/Cyberpunk_fantasy.safetensors": 0.3,
+            f"{data}/train/checkpoint-3000/pytorch_lora_weights.safetensors": 0.5,
+            }, pipe=pipe)
+        | Loop(state['timesteps'], name="Denoise loop", callback=lambda timestep_index, timestep:
+            state['latent'] 
+            | CFGPrepare(guidance_scale=state['guidance_scale']) 
+            - cnet(
+                timestep_index=timestep_index,
+                timestep=timestep,
+                image=state["controlnet_image"].cnet(),
+                timesteps=state['timesteps'],
+                embeddings=state['embeddings'],
+                controlnet_scale=[1.0],
+            )
+            | unet(
+                timestep=timestep,
+                embeddings=state['embeddings'],
+            )                            
+            | CFGProcess(guidance_scale=state['guidance_scale'])
+            | Step(
+               scheduler=pipe.scheduler, 
+               timestep=timestep, 
+               latent=state['latent'])
+            - LatentShow(fps=state['fps'], vae=vae, vae_batch=state['vae_batch'])
+            > state("latent")
+        )
+        | Debug("Denoise loop end")
+    ) >> \
+    (state['latent'] | VideoVaeLatentDecode(vae=vae, vae_batch=state['vae_batch']) | VideoShow(fps=state['fps']) )

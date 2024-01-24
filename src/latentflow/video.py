@@ -4,6 +4,8 @@ from typing import List, Optional, Tuple, Union, Generator
 import torch.nn.functional as F
 from .flow import Flow
 
+import cv2
+import numpy as np
 import logging
 
 class Video(Flow):
@@ -23,8 +25,6 @@ class Video(Flow):
         if device is not None:
             self.video = self.video
 
-        logging.debug("Video init %s", self)
-
     def __str__(self):
         if self.video is not None:
             shape = self.video.shape
@@ -34,8 +34,15 @@ class Video(Flow):
 
         return f'Video(None)'
 
+    def __getitem__(self, key):
+        return Video('HWC', self.video[key])
+
     def size(self):
         return (self.video.shape[2], self.video.shape[3])
+
+    def save(self, path, fps):
+        self.write_video_cv2(self.chw(), path, fps)
+        return self
 
     def resize(self, size):
         v = self.chw().float()
@@ -57,4 +64,29 @@ class Video(Flow):
 
     def cnet(self):
         return self.chw().float()/255.0
+
+    def write_video_cv2(self, frames, output_path, fps):
+        if isinstance(frames, torch.Tensor):
+            frames = frames.detach().cpu().numpy()
+
+        frames = np.array(frames)
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        shape = frames[0].shape
+        frame_size = (shape[1], shape[0])
+
+        # Create the VideoWriter object
+        out = cv2.VideoWriter(output_path, fourcc, fps, frame_size)
+
+        # Assuming you have a NumPy array of frames called 'frames'
+        for frame in frames:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            # Ensure the frame is in uint8 format
+            frame = np.uint8(frame)
+
+            # Write the frame to the video file
+            out.write(frame)
+
+        # Release the VideoWriter object
+        out.release()
 

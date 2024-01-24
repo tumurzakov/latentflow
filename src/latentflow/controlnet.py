@@ -97,9 +97,11 @@ class ControlNet(Flow):
         timestep = self.timestep
         timesteps = self.timesteps
 
-        embeddings = self.embeddings.embeddings
+        embeddings = self.embeddings.embeddings.to(
+                device=self.controlnet.device,
+                dtype=self.controlnet.dtype)
 
-        latent_model_input = latent.latent
+        latent_model_input = latent.latent.to(self.controlnet.device, self.controlnet.dtype)
         latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep)
 
         controlnet_images = self.controlnet_images
@@ -107,7 +109,9 @@ class ControlNet(Flow):
                 device=self.controlnet.device,
                 dtype=self.controlnet.dtype)
 
-        logging.debug("ControlNet %s %s", controlnet_images.shape, embeddings.shape)
+        logging.debug("ControlNet images %s %s", controlnet_images.shape, controlnet_images.dtype)
+        logging.debug("ControlNet embeddings %s %s", embeddings.shape, embeddings.dtype)
+        logging.debug("ControlNet latents %s %s", latent_model_input.shape, latent_model_input.dtype)
 
         controlnet_conditioning_scale = self.controlnet_scale
 
