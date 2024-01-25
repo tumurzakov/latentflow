@@ -11,6 +11,7 @@ class Prompt(Flow):
             image = None,
             negative_image = None,
             frames: List = None,
+            embeddings = None,
             ):
         self.prompt = prompt
         self.negative_prompt = negative_prompt
@@ -18,6 +19,7 @@ class Prompt(Flow):
         self.negative_image = negative_image
         self.frames = frames
         self.prompts = None
+        self.embeddings = embeddings
 
         if frames is not None:
             self.prompts = [None for x in range(max(frames)+1)]
@@ -26,8 +28,9 @@ class Prompt(Flow):
                     self.prompts[x] = Prompt(
                             prompt=self.prompt,
                             negative_prompt=self.negative_prompt,
-                            image=self.image[:, x:x+1],
-                            negative_image=self.negative_image[:, x:x+1],
+                            image=self.image[:, x:x+1] if self.image is not None else None,
+                            negative_image=self.negative_image[:, x:x+1] if self.negative_image is not None else None,
+                            embeddings=self.embeddings,
                             )
 
         if self.frames is not None:

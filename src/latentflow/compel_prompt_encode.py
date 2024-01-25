@@ -33,6 +33,8 @@ class CompelPromptEncode(Flow):
                         negative_prompt=p.negative_prompt,
                         )
                 embeddings.append(e)
+                p.embeddings = PromptEmbeddings(e)
+
             embeddings = torch.stack(embeddings)
             embeddings = rearrange(embeddings, 'f b n c -> (b f) n c')
 
@@ -42,7 +44,8 @@ class CompelPromptEncode(Flow):
                     negative_prompt=prompt.negative_prompt,
                     )
 
-        return PromptEmbeddings(embeddings=embeddings)
+        prompt.embeddings = PromptEmbeddings(embeddings=embeddings)
+        return prompt
 
     def encode(self, prompt, negative_prompt, num_videos_per_prompt=1):
         batch_size = len(prompt) if isinstance(prompt, list) else 1

@@ -10,10 +10,11 @@ def tensor_hash(tensor):
     hash_value = hash_object.hexdigest()
     return hash_value
 
-class Debug(Flow):
-    def __init__(self, comment="", callback=None):
+class Log(Flow):
+    def __init__(self, level=logging.DEBUG, comment="", callback=None):
         self.comment = comment
         self.callback = callback
+        self.level = level
 
     def apply(self, other):
         debug = other
@@ -21,8 +22,25 @@ class Debug(Flow):
         if self.callback is not None:
             debug = self.callback(debug)
 
-        logging.debug('Debug %s %s', self.comment, debug)
+        logging.log(self.level, 'Debug %s %s', self.comment, debug)
         return other
+
+class Debug(Log):
+    def __init__(self, comment="", callback=None):
+        super().__init__(
+                level=logging.DEBUG,
+                comment=comment,
+                callback=callback,
+                )
+
+class Info(Log):
+    def __init__(self, comment="", callback=None):
+        super().__init__(
+                level=logging.INFO,
+                comment=comment,
+                callback=callback,
+                )
+
 
 class DebugHash(Flow):
     def __init__(self, comment="", callback=None):

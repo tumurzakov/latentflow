@@ -7,12 +7,11 @@ from .prompt_embeddings import PromptEmbeddings
 
 class IPAdapterPromptEncode(Flow):
     """
-    Prompt -> IPAdapterPromptEncode -> PromptEmbeddings
+    Prompt -> IPAdapterPromptEncode -> Prompt
     """
 
-    def __init__(self, ip_adapter, scale=None):
+    def __init__(self, ip_adapter):
         self.ip_adapter = ip_adapter
-        self.scale = scale
 
     def apply(self, prompt):
         logging.debug("IPAdapterPromptEncode apply %s", prompt)
@@ -21,27 +20,36 @@ class IPAdapterPromptEncode(Flow):
 
             embeddings = []
             for i, p in enumerate(prompt.prompts):
-                e = self.encode(p, self.scale)
+                e = self.encode(p)
                 embeddings.append(e)
             embeddings = torch.stack(embeddings)
             embeddings = rearrange(embeddings, 'f b n c -> (b f) n c')
+            p.embeddings = PromptEmbeddings(embeddings)
 
         else:
-            embeddings = self.encode(prompt, self.scale)
+            embeddings = self.encode(prompt)
 
-        return PromptEmbeddings(embeddings=embeddings)
+        prompt.embeddings = PromptEmbeddings(embeddings=embeddings)
+        return prompt
 
-    def encode(self, prompt, scale=None):
-        if scale is not None:
-            self.ip_adapter.set_scale(scale)
-
-        text_embeddings, uncond_embeddings = self.ip_adapter.get_prompt_embeds(
+    def encode(self, prompt):
+        cond_image_embeddings, uncond_image_embeddings = self.ip_adapter.get_image_embeds(
                 images=prompt.image.chw()[0],
                 negative_images=prompt.negative_image.chw()[0],
-                prompt=prompt.prompt,
-                negative_prompt=prompt.negative_prompt,
                 )
 
-        embeddings = torch.cat([uncond_embeddings, text_embeddings])
+        if cond_image_embeddings.shape[0] > 1:
+            cond_image_embeddings = torch.cat(cond_image_embeddings.chunk(cond_image_embeddings.shape[0]), dim=1)
+        if uncond_image_embeddings.shape[0] > 1:
+            uncond_image_embeddings = torch.cat(uncond_image_embeddings.chunk(uncond_image_embeddings.shape[0]), dim=1)
+
+        cond_embeddings = cond_image_embeddings
+        uncond_embeddings = uncond_image_embeddings
+        if prompt.embeddings is not None:
+            uncond_embeddings, cond_embeddings = prompt.embeddings.embeddings.chunk(2)
+            cond_embeddings = torch.cat([cond_embeddings, cond_image_embeddings], dim=1)
+            uncond_embeddings = torch.cat([uncond_embeddings, uncond_image_embeddings], dim=1)
+
+        embeddings = torch.cat([uncond_embeddings, cond_embeddings])
 
         return embeddings

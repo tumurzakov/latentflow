@@ -59,9 +59,20 @@ class VideoFaceCrop(Flow):
                         face_shape = face.shape
                         scale = min(frame_shape[0]/face_shape[0], frame_shape[1]/face_shape[1])
                         face_chw = rearrange(face, 'h w (b c) -> b c h w', b=1)
-                        z = self.interpolate(face_chw.float(), (scale,scale))
-                        z = rearrange(z, 'b c h w -> h w (b c)')
-                        back[0:z.shape[0], 0:z.shape[1], :] = z.to(torch.uint8)
+                        zoom_face = self.interpolate(face_chw.float(), (scale,scale))
+                        zoom_face = rearrange(zoom_face, 'b c h w -> h w (b c)')
+                        center_h = back.shape[0]//2
+                        center_w = back.shape[1]//2
+                        delta_h = min(zoom_face.shape[0],back.shape[0])//2
+                        delta_w = min(zoom_face.shape[1],back.shape[1])//2
+                        start_h = center_h-delta_h
+                        start_w = center_w-delta_w
+                        back[
+                                start_h:start_h+zoom_face.shape[0],
+                                start_w:start_w+zoom_face.shape[1],
+                                :
+                            ] = zoom_face.to(torch.uint8)
+
                     else:
                         back[y0:y1,x0:x1,:] = face
 

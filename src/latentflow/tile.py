@@ -2,6 +2,7 @@ import torch
 import logging
 import random
 
+from .flow import Flow
 from .latent import Latent
 from .tensor import Tensor
 
@@ -40,12 +41,13 @@ class Tile:
                 self.width, self.width_overlap, self.width_offset,
                 )
 
-class TileGenerator:
+class TileGenerator(Flow):
     def __init__(self,
             tile: Tile,
             latent: Latent,
             do_classifier_free_guidance=True,
             pixel_infer_count=None,
+            loop_control=1000,
             *args,
             **kwargs):
 
@@ -67,7 +69,7 @@ class TileGenerator:
         self.tiles = []
         self.audit = torch.zeros_like(latent.latent).int()
 
-        self.loop_control = 1000
+        self.loop_control = loop_control
         self.simple(self.tile)
 
         self._index = 0
@@ -150,42 +152,15 @@ class TileGenerator:
                         w_start += offset
                         w_end += offset
 
-                    if w_start < shape[4] and w_end > shape[4]:
-                        self.append_tile((
-                            slice(b, b + 1),
-                            slice(0, 4),
-                            slice(l_start, l_end),
-                            slice(h_start, h_end),
-                            slice(w_start, w_end),
-                            ))
-
                     overlap = tile.height - tile.height_overlap
                     offset = overlap - tile.height_offset % overlap
                     h_start += offset
                     h_end += offset
 
-                if h_start < shape[3] and h_end > shape[3]:
-                    self.append_tile((
-                        slice(b, b + 1),
-                        slice(0, 4),
-                        slice(l_start, l_end),
-                        slice(h_start, h_end),
-                        slice(w_start, w_end),
-                        ))
-
                 overlap = tile.length - tile.length_overlap
                 offset = overlap - tile.length_offset % overlap
                 l_start += offset
                 l_end += offset
-
-            if l_start < shape[2] and l_end > shape[2]:
-                self.append_tile((
-                    (b, b + 1),
-                    (0, 4),
-                    (l_start, l_end),
-                    (h_start, h_end),
-                    (w_start, w_end),
-                    ))
 
         logging.info("GenerateTiles simple %s", len(self.tiles))
 

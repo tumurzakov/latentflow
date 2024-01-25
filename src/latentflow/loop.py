@@ -1,6 +1,7 @@
 import logging
 import torch
 from typing import Callable, List, Optional, Tuple, Union, Generator
+from tqdm import tqdm
 
 from .flow import Flow
 
@@ -10,6 +11,7 @@ class Loop(Flow):
             collection,
             callback:Optional[Callable] = None,
             name: Optional[str] = "",
+            progress_bar: bool = False,
             ):
 
         self.collection = collection
@@ -19,6 +21,10 @@ class Loop(Flow):
         self.callback = callback
         self.name = name
         self.index = 0
+
+        self.progress_bar = None
+        if progress_bar:
+            self.progress_bar = tqdm(total=len(self.collection), desc=self.name)
 
         logging.debug("Loop init %s %s", self.name, type(self.collection))
 
@@ -34,6 +40,9 @@ class Loop(Flow):
                 result = self.callback(self.index, item)
 
             self.index += 1
+            if self.progress_bar is not None:
+                self.progress_bar.update()
+
             return self.apply(result)
 
         except StopIteration:

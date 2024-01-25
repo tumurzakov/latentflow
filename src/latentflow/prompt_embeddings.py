@@ -6,11 +6,13 @@ class PromptEmbeddings(Flow):
     def __init__(self, embeddings=None):
         # torch.Size([2, 77, 768])
         self.embeddings = embeddings
-        logging.debug(f"PromptEmbeddings init {self}")
 
     def slice(self, l):
         logging.debug(f"PromptEmbeddings slice {l}")
         return PromptEmbeddings(self.embeddings[l, :, :])
+
+    def __getitem__(self, key):
+        return PromptEmbeddings(self.embeddings[key])
 
     def __str__(self):
         if self.embeddings is not None:
