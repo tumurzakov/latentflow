@@ -1,4 +1,5 @@
 import logging
+import torch
 from .flow import Flow
 
 class PromptEmbeddings(Flow):
@@ -10,6 +11,14 @@ class PromptEmbeddings(Flow):
     def slice(self, l):
         logging.debug(f"PromptEmbeddings slice {l}")
         return PromptEmbeddings(self.embeddings[l, :, :])
+
+    def save(self, path):
+        torch.save(self.embeddings, path)
+        return self
+
+    def load(self, path):
+        self.embeddings = torch.load(path)
+        return self
 
     def __getitem__(self, key):
         return PromptEmbeddings(self.embeddings[key])

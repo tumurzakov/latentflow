@@ -8,10 +8,11 @@ from .prompt import Prompt
 from .prompt_embeddings import PromptEmbeddings
 
 class CompelPromptEncode(Flow):
-    def __init__(self, tokenizer, text_encoder, do_classifier_free_guidance=True):
+    def __init__(self, tokenizer, text_encoder, do_classifier_free_guidance=True, weight=1.0):
         self.tokenizer = tokenizer
         self.text_encoder = text_encoder
         self.do_classifier_free_guidance = do_classifier_free_guidance
+        self.weight = weight
 
         self.compel = Compel(
             tokenizer=tokenizer,
@@ -35,8 +36,10 @@ class CompelPromptEncode(Flow):
                 embeddings.append(e)
                 p.embeddings = PromptEmbeddings(e)
 
-            embeddings = torch.stack(embeddings)
-            embeddings = rearrange(embeddings, 'f b n c -> (b f) n c')
+            length = len(prompt.prompts)
+            bs_embed, seq_len, _ = embeddings[0].shape
+            embeddings = torch.cat(embeddings, dim=1)
+            embeddings = embeddings.view(bs_embed * length, seq_len, -1)
 
         else:
             embeddings = self.encode(
@@ -71,5 +74,5 @@ class CompelPromptEncode(Flow):
             # to avoid doing two forward passes
             text_embeddings = torch.cat([uncond_embeddings, text_embeddings])
 
-        return text_embeddings
+        return text_embeddings*self.weight
 

@@ -63,3 +63,12 @@ class Prompt(Flow):
 
     def __str__(self):
         return f'Prompt(+[{self.prompt}], -[{self.negative_prompt}])'
+
+    def save(self, path):
+        assert self.embeddings is not None, "Embeddings are empty"
+        self.embeddings.save(path)
+        return self
+
+    def load(self, path):
+        self.embeddings = PromptEmbeddings().load(path)
+        return self

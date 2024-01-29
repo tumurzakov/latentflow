@@ -24,7 +24,7 @@ from latentflow.lora import LoraOn, LoraOff
 from latentflow.apply import Apply
 from latentflow.controlnet import ControlNet
 from latentflow.loop import Loop
-from latentflow.tile import Tile, TileGenerator
+from latentflow.tile import Tile, TileGenerator, UniformFrameTileGenerator
 from latentflow.step import Step
 from latentflow.tensor import Tensor,TensorAdd
 from latentflow.mask import MaskEncode, Mask, LatentMaskCut, VideoMaskCut, LatentMaskMerge, LatentMaskCrop
@@ -60,20 +60,24 @@ comfy_ip_adapter_face_plus = ComfyIPAdapterPromptEncode(
     ip_adapter_path=f'{models}/IP-Adapter/models/ip-adapter-plus-face_sd15.bin',
     clip_path=f'{models}/IP-Adapter/models/image_encoder/pytorch_model.bin',
     pipe = pipe,
+    noise = 0.0,
+    weight = 1.0,
 )
 
 comfy_ip_adapter_faceid = ComfyIPAdapterPromptEncode(
     ip_adapter_path=f'{models}/IP-Adapter/models/ip-adapter-faceid-plusv2_sd15.bin',
     clip_path=f'{models}/IP-Adapter/models/image_encoder/pytorch_model.bin',
     pipe = pipe,
+    noise = 0.0,
+    weight = 1.0,
 )
 
 state = State({
     'width': 512,
     'height': 288,
-    'video_length': 144,
+    'video_length': 48,
     'vae_batch': 12,
-    'num_inference_steps': 10,
+    'num_inference_steps': 30,
     'guidance_scale': 7,
     'start_frame': 0,
     'fps': 16,
@@ -82,12 +86,15 @@ state = State({
 state.update({
     'tile': {
         'length':48,
-        'height':state['height'],
-        'width':state['width'],
-        'length_overlap': 48//2,
-        'height_overlap': state['height']//2,
-        'width_overlap': state['width']//2,
+        'width':512,
+        'height':288,
+        'length_overlap': 32,
+        'height_overlap': 256,
+        'width_overlap': 256,
         'offset': 0,
+
+        'strides': 3,
+        'overlap': 8,
     },
 })
 
@@ -120,26 +127,37 @@ video = (
         - LatentShow(fps=state['fps'], vae=vae, vae_batch=state['vae_batch'])
         > state("latent")
         ) >> \
-    (Debug("Load facecrop video")
+    (Debug("Load facecrop video 1")
         | VideoLoad(
             f'{data}/in_720.mp4', 
             device='cuda', 
             video_length=state['video_length'], 
             start_frame=state['start_frame'],
         )
-        | VideoFaceCrop(cache=f'{data}/infer/facecrop.pth', zoom=True)
-        - VideoShow(fps=state['fps'])
-        > state('face_video')
+        | VideoFaceCrop(cache=f'{data}/infer/facecrop1.pth', padding_percent=0.1, size=(224,224))
+        | VideoShow(fps=state['fps'])
+        > state('face_video_plus')
+        ) >> \
+    (Debug("Load facecrop video 2")
+        | VideoLoad(
+            f'{data}/in_720.mp4', 
+            device='cuda', 
+            video_length=state['video_length'], 
+            start_frame=state['start_frame'],
+        )
+        | VideoFaceCrop(cache=f'{data}/infer/facecrop2.pth', padding_percent=0.4, size=(224,224))
+        | VideoShow(fps=state['fps'])
+        > state('face_video_faceid')
         ) >> \
     (Latent(shape=(1,4,state['video_length'],state['height']//8,state['width']//8), device='cuda')
         | Noise(scheduler=pipe.scheduler, device='cuda')
         - LatentShow(fps=state['fps'], vae=vae, vae_batch=state['vae_batch'])
-        > state("latent")
+        < state("latent")
         ) >> \
     (Prompt(
             prompt=
                "(young woman in haute couture dress)1.0,"
-               "boring office, window behind, fast moving clouds, rain, dark,"
+               "boring office on background, working employees, computers, phones, copiers, working people,"
                "cyberpunk, fantasy, sci-fi, stunning, concept, artstation, acid colors,"
                "octane render, Unreal engine, cg unity, hdr, wallpaper, neonpunkai, lineart,",
             negative_prompt=
@@ -149,13 +167,13 @@ video = (
                "(mutated hands and fingers)1.0,"
                "disconnected limbs, mutation, mutated,"
                "ugly, disgusting, blurry, amputation,",
-            image=state['face_video'],
-            negative_image=MandelbrotNoise(state['input_video'].hwc().shape).apply(),
             frames=list(range(0,state['video_length'])),
+            #embeddings=PromptEmbeddings()|Load(f'{data}/infer/embeddings_{state['video_length']}.pth')
         )
         | CompelPromptEncode(tokenizer=pipe.tokenizer, text_encoder=pipe.text_encoder)
-        | comfy_ip_adapter_faceid
-        | comfy_ip_adapter_face_plus
+        | comfy_ip_adapter_faceid(state['face_video_faceid'])
+        | comfy_ip_adapter_face_plus(state['face_video_plus'])
+        | Save(f'{data}/infer/embeddings_48.pth')
         > state("prompt")
         ) >> \
     (Debug("Loading controlnet")
@@ -169,7 +187,7 @@ video = (
             height=state['height'], 
             start_frame=state['start_frame'],
         )
-        - VideoShow(fps=state['fps'])
+        | VideoShow(fps=state['fps'])
         > state('controlnet_image')
         ) >> \
     (state \
@@ -179,46 +197,31 @@ video = (
     (state['latent']
         - LatentShow(fps=state['fps'], vae=vae)
         | LoraOn(loras={
-            f"{models}/lora/details.safetensors": 0.8,
-            f"{models}/lora/phblue.safetensors": 0.5,
-            f"{models}/lora/Neonpunkai.safetensors": 0.8,
-            f"{models}/lora/Cyberpunk_fantasy.safetensors": 0.3,
-            f"{models}/IP-Adapter/models/lora/ip-adapter-faceid-plusv2_sd15_lora.safetensors": 1.0,
+            # f"{models}/lora/details.safetensors": 0.8,
+            # f"{models}/lora/phblue.safetensors": 0.5,
+            # f"{models}/lora/Neonpunkai.safetensors": 0.8,
+            # f"{models}/lora/Cyberpunk_fantasy.safetensors": 0.3,
+            f"{models}/IP-Adapter/models/lora/ip-adapter-faceid-plusv2_sd15_lora.safetensors": 0.6,
             }, pipe=pipe)
         | Loop(state['timesteps'], name="Denoise loop", progress_bar=True, callback=lambda timestep_index, timestep:
             (Latent(torch.zeros_like(state['latent'].latent).repeat(2,1,1,1,1)) > state('noise_predict')) >> \
             (Tensor(torch.zeros_like(state['latent'].latent)) > state('pixel_infer_count')) >> \
             (state
                  | Loop(
-                    TileGenerator(
-                        Tile(
-                            height=state['tile']['height']//8,
-                            width=state['tile']['width']//8,
-                            length=state['tile']['length'],
-                            length_overlap=state['tile']['length_overlap'],
-                            height_overlap=state['tile']['height_overlap']//8,
-                            width_overlap=state['tile']['width_overlap']//8,
-                            width_offset=timestep_index,
-                            length_offset=timestep_index,
-                            ),
-                        state['latent'],
-                        do_classifier_free_guidance=True,
+                    UniformFrameTileGenerator(
+                        timestep_index=timestep_index,
+                        context_size=state['tile']['length'],
+                        strides=state['tile']['strides'],
+                        overlap=state['tile']['overlap'],
+                        latent=state['latent'],
                         pixel_infer_count=state['pixel_infer_count'],
                     ),
                     name="Tile loop",
                     callback=lambda tile_index, tile:
-                        (Tensor(torch.zeros((1,4,state['tile']['length'],state['tile']['height']//8,state['tile']['width']//8), device='cuda'))
-                            | TensorAdd(state['latent'].latent[tile])
-                            | Apply(lambda x: Latent(x.tensor))
-                            | Debug("TileLatent")
-                            > state("tile_latent")) >> \
+                        (state['latent'][tile] > state("tile_latent")) >> \
 
-                        (Tensor(torch.zeros((1,state['tile']['length'],3,state['tile']['height'],state['tile']['width']), device='cuda'))
-                            | Debug("Controlnet tile tensor")
-                            | TensorAdd((state['controlnet_image'].cnet())[:,tile[2],:,slice_scale(tile[3],8),slice_scale(tile[4],8)])
-                            - Debug("TileControlNet", lambda x: x.tensor.shape)
-                            > state("tile_controlnet_image")) >> \
-
+                        (state['controlnet_image'][:,tile[2],slice_scale(tile[3],8),slice_scale(tile[4],8),:].cnet() > state("tile_controlnet_image")) >> \
+                     
                         state['tile_latent']
                             | CFGPrepare(guidance_scale=state['guidance_scale'])
                             | cnet(
@@ -233,7 +236,7 @@ video = (
                                 timestep=timestep,
                                 embeddings=state['prompt'].embeddings.slice(slice_scale(tile[2],2)),
                             )
-                            | LatentAdd(NoisePredict(state['noise_predict'].latent[tile]))
+                            | LatentAdd(state['noise_predict'], tile)
 
 
                   ) | Debug("Tile loop end")
@@ -251,6 +254,6 @@ video = (
         )
         | Debug("Denoise loop end")
     )
-    | LatentShow(fps=16, vae=vae, vae_batch=state['vae_batch'])
     | Save(path=f'{data}/samples/%datetime%/latent.pth')
+    | LatentShow(fps=16, vae=vae, vae_batch=state['vae_batch'])
 )

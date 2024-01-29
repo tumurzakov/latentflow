@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 from .flow import Flow
 from .prompt_embeddings import PromptEmbeddings
+from .debug import tensor_hash
 
 from diffusers.pipelines.controlnet import MultiControlNetModel
 
@@ -44,6 +45,8 @@ class ComfyIPAdapterPromptEncode(Flow):
         self.weight = weight
         self.device = self.pipe.unet.device
         self.dtype = self.pipe.unet.dtype
+
+        self.tensor_cache = {}
 
         self.model = ModelPatcher(pipe.unet, load_device='cuda', offload_device='cpu')
         self.ip_adapter = IPAdapterModelLoader().load_ipadapter_model(ip_adapter_path)[0]
@@ -106,29 +109,60 @@ class ComfyIPAdapterPromptEncode(Flow):
 
         return self
 
+    def __call__(self, video, weight=None, scale=None):
+        self.video = video
+
+        if weight is not None:
+            self.weight = weight
+
+        if scale is not None:
+            self.set_scale(scale)
+
+        return self
+
     def apply(self, prompt):
         logging.debug("ComfyIPAdapterPromptEncode apply %s", prompt)
 
+
         if prompt.prompts is not None:
+            self.tensor_cache = {}
 
             embeddings = []
             for i, p in enumerate(tqdm(prompt.prompts, desc='ip adapter')):
-                e = self.encode(p)
+                try:
+                    image = self.video.hwc()[0][i:i+1]/255.0
+                    h = tensor_hash(image)
+                    if h in self.tensor_cache:
+                        e = self.tensor_cache[h]
+                    else:
+                        e = self.encode(p, image)
+                        self.tensor_cache[h] = e
+                except:
+                    e = prompt.prompts[i-1].embeddings.embeddings
+
                 p.embeddings = PromptEmbeddings(e)
                 embeddings.append(e)
-            embeddings = torch.stack(embeddings)
-            embeddings = rearrange(embeddings, 'f b n c -> (b f) n c')
 
+            length = len(prompt.prompts)
+            bs_embed, seq_len, _ = embeddings[0].shape
+            embeddings = torch.cat(embeddings, dim=1)
+            embeddings = embeddings.view(bs_embed * length, seq_len, -1)
+
+            self.tensor_cache = {}
         else:
-            embeddings = self.encode(prompt)
+            image = self.video.hwc()[0][:1]/255.0
+            embeddings = self.encode(prompt, image)
 
         prompt.embeddings = PromptEmbeddings(embeddings)
         return prompt
 
-    @torch.inference_mode()
-    def encode(self, prompt):
+    def set_scale(self, scale):
+        for attn_processor in self.pipe.unet.attn_processors.values():
+            if isinstance(attn_processor, IPAttnProcessor):
+                attn_processor.scale = scale
 
-        image = prompt.image.hwc()[0]/255.0
+    @torch.inference_mode()
+    def encode(self, prompt, image):
 
         cond_image_embeddings, uncond_image_embeddings = self.ip_adapter_apply.encode(
                 self.ip_adapter,

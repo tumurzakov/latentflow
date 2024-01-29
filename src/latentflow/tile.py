@@ -6,6 +6,26 @@ from .flow import Flow
 from .latent import Latent
 from .tensor import Tensor
 
+import numpy as np
+
+def ordered_halving(i):
+    return int('{:064b}'.format(i)[::-1], 2) / (1 << 64)
+
+
+def uniform(step, n, context_size, strides, overlap, closed_loop=True):
+    if n <= context_size:
+        yield list(range(n))
+        return
+    strides = min(strides, int(np.ceil(np.log2(n / context_size))) + 1)
+    for stride in 1 << np.arange(strides):
+        pad = int(round(n * ordered_halving(step)))
+        for j in range(
+                int(ordered_halving(step) * stride) + pad,
+                n + pad + (0 if closed_loop else -overlap),
+                (context_size * stride - overlap)
+        ):
+            yield [e % n for e in range(j, j + context_size * stride, stride)]
+
 class Tile:
     def __init__(self,
             length: int,
@@ -40,6 +60,86 @@ class Tile:
                 self.height, self.height_overlap, self.height_offset,
                 self.width, self.width_overlap, self.width_offset,
                 )
+
+class UniformFrameTileGenerator(Flow):
+    def __init__(self,
+            timestep_index,
+            context_size,
+            strides,
+            overlap,
+            latent,
+            pixel_infer_count=None,
+            do_classifier_free_guidance=True,
+            ):
+        self.timestep_index = timestep_index
+        self.context_size = context_size
+        self.strides = strides
+        self.overlap = overlap
+        self.latent = latent
+        self.do_classifier_free_guidance = do_classifier_free_guidance
+
+        self.pixel_infer_count = pixel_infer_count
+        if self.pixel_infer_count is None:
+            self.pixel_infer_count = torch.zeros_like(latent.latent)
+        else:
+            assert isinstance(self.pixel_infer_count, Tensor), "pixel_infer_count should be Tensor"
+            self.pixel_infer_count = self.pixel_infer_count.tensor
+
+        self.tiles = []
+        self.uniform()
+
+        self._index = 0
+        logging.debug("UniformFrameTileGenerator init [%s] tiles", len(self.tiles))
+
+    def append_tile(self, tile):
+        if self.do_classifier_free_guidance:
+            bslice = slice(tile[0].start*2, tile[0].stop*2)
+            tile = (
+                    bslice,
+                    tile[1],
+                    tile[2],
+                    tile[3],
+                    tile[4],
+                    )
+
+        self.tiles.append(tile)
+        self.pixel_infer_count[tile] += 1
+
+    def uniform(self):
+        for seq in uniform(
+                self.timestep_index,
+                self.latent.shape[2],
+                self.context_size,
+                self.strides,
+                self.overlap):
+
+            self.append_tile((
+                slice(0, self.latent.shape[0]),
+                slice(0, self.latent.shape[1]),
+                seq,
+                slice(0, self.latent.shape[3]),
+                slice(0, self.latent.shape[4]),
+                ))
+
+    def __len__(self):
+        return len(self.tiles) if self.tiles is not None else 0
+
+    def __str__(self):
+        return f'tiles({len(self)})'
+
+    def __iter__(self):
+        self._index = 0
+        return self
+
+    def __next__(self):
+        if self._index < len(self.tiles):
+            tile = self.tiles[self._index]
+            logging.debug("UniformFrameGenerator next %s %s", self._index, tile)
+            self._index += 1
+
+            return tile
+        else:
+            raise StopIteration
 
 class TileGenerator(Flow):
     def __init__(self,

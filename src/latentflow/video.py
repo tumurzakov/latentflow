@@ -3,6 +3,7 @@ from einops import rearrange
 from typing import List, Optional, Tuple, Union, Generator
 import torch.nn.functional as F
 from .flow import Flow
+from .tensor import Tensor
 
 import cv2
 import numpy as np
@@ -63,7 +64,7 @@ class Video(Flow):
         return self.video
 
     def cnet(self):
-        return self.chw().float()/255.0
+        return Tensor(self.chw().float()/255.0)
 
     def write_video_cv2(self, frames, output_path, fps):
         if isinstance(frames, torch.Tensor):

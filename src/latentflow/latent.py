@@ -88,30 +88,27 @@ class Latent(Flow):
 
         return f'Latent(None)'
 
+    def __getitem__(self, key):
+        return Latent(self.latent[key])
+
+
 class NoisePredict(Latent):
     pass
 
 class LatentAdd(Flow):
-    def __init__(self, latent):
+    def __init__(self, latent, key=None):
         self.latent = latent
+        self.key = key
 
     def apply(self, other):
-        logging.debug("LatentAdd.apply %s %s", self.latent, other)
+        logging.debug("LatentAdd.apply %s[%s] %s", self.latent, self.key, other)
 
         s = self.latent.latent
         l = other.latent
 
-        t = (
-            slice(0, s.shape[0]),
-            slice(0, s.shape[1]),
-            slice(0, s.shape[2]),
-            slice(0, s.shape[3]),
-            slice(0, s.shape[4]),
-        )
-
-        logging.debug("LatentAdd apply %s %s %s", self.latent, other, t)
-
-        s[t] += l[t]
+        if self.key is not None:
+            s[self.key] += l
+        else:
+            s += l
 
         return self.latent
-

@@ -851,7 +851,7 @@ class IPAdapterApply:
         image_prompt_embeds = image_prompt_embeds.to(self.device, dtype=self.dtype)
         uncond_image_prompt_embeds = uncond_image_prompt_embeds.to(self.device, dtype=self.dtype)
 
-        return image_prompt_embeds, uncond_image_prompt_embeds
+        return image_prompt_embeds*weight, uncond_image_prompt_embeds*weight
 
     def apply_ipadapter(self, ipadapter, model, weight, clip_vision=None, image=None, weight_type="original", noise=None, embeds=None, attn_mask=None, start_at=0.0, end_at=1.0, unfold_batch=False, insightface=None, faceid_v2=False, weight_v2=False):
         self.dtype = torch.float16 if comfy.model_management.should_use_fp16() else torch.float32
