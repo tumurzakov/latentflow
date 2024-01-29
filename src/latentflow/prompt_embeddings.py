@@ -10,7 +10,11 @@ class PromptEmbeddings(Flow):
 
     def slice(self, l):
         logging.debug(f"PromptEmbeddings slice {l}")
-        return PromptEmbeddings(self.embeddings[l, :, :])
+        uncond_embeddings, cond_embeddings = self.embeddings.chunk(2)
+        uncond = uncond_embeddings[l,:,:]
+        cond = cond_embeddings[l,:,:]
+        embeddings = torch.cat([uncond, cond])
+        return PromptEmbeddings(embeddings)
 
     def save(self, path):
         torch.save(self.embeddings, path)
