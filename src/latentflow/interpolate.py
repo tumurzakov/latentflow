@@ -3,6 +3,7 @@ import logging
 import torch.nn.functional as F
 
 from .flow import Flow
+from .tensor import Tensor
 
 class Interpolate(Flow):
     def __init__(self,
@@ -20,13 +21,15 @@ class Interpolate(Flow):
         self.recompute_scale_factor = recompute_scale_factor
         self.antialias = antialias
 
-    def apply(self, tensor: torch.Tensor) -> torch.Tensor:
-        return F.interpolate(
-                tensor,
+    def apply(self, tensor: Tensor) -> Tensor:
+        t = tensor.tensor
+        t = F.interpolate(
+                t,
                 scale_factor = self.scale_factor,
                 mode=self.mode,
                 align_corners=self.align_corners,
                 recompute_scale_factor=self.recompute_scale_factor,
                 antialias=self.antialias,
                 )
+        return Tensor(t)
 

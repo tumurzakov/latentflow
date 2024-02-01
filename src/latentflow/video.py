@@ -91,3 +91,26 @@ class Video(Flow):
         # Release the VideoWriter object
         out.release()
 
+class VideoAdd(Flow):
+    def __init__(self, video, key=None):
+        self.video = video
+        self.key = key
+
+    def apply(self, other):
+        logging.debug("VideoAdd.apply %s[%s] %s", self.video, self.key, other)
+
+        s = self.video.video
+        l = other.video
+
+        if self.key is not None:
+            s[self.key] += l
+        else:
+            s[
+                0:l.shape[0],
+                0:l.shape[1],
+                0:l.shape[2],
+                0:l.shape[3],
+                0:l.shape[4]
+            ]+= l
+
+        return self.video

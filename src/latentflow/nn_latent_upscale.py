@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from einops import rearrange
 
 from .flow import Flow
+from .latent import Latent
 
 def normalization(channels):
     return nn.GroupNorm(32, channels)
@@ -271,9 +272,16 @@ class NNLatentUpscale(Flow):
                     latents.dtype,
                     )
 
-        self.model.to(device=device)
-        latent_out = (
-            self.model(self.scale_factor * latents, scale=self.scale) / self.scale_factor
-            )
+        self.model.to(device=latents.device)
 
-        return Latent(latent_out)
+        frames = []
+        for f in range(latents.shape[2]):
+            latent_out = (
+                self.model(self.scale_factor * latents[:, :, f, :, :], scale=self.scale) / self.scale_factor
+            )
+            frames.append(latent_out)
+
+        frames = torch.stack(frames)
+        batches = rearrange(frames, 'f b c h w -> b c f h w')
+
+        return Latent(batches)

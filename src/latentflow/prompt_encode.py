@@ -14,14 +14,30 @@ class PromptEncode(Flow):
 
     @torch.no_grad()
     def apply(self, prompt: Prompt):
-        logging.debug(f"PromptEncode apply {prompt}")
+        logging.debug(f"CompelPromptEncode apply {prompt}")
 
-        cond_embeddings, uncond_embeddings = text_embeddings(
-                self.tokenizer,
-                self.text_encoder,
-                prompt=prompt.prompt,
-                negative_prompt=prompt.negative_prompt,
-                )
+        if prompt.prompts is not None:
 
-        embeddings = torch.cat([uncond_embeddings, cond_embeddings])
-        return PromptEmbeddings(embeddings=embeddings)
+            embeddings = []
+            for i, p in enumerate(prompt.prompts):
+                e = self.encode(
+                        prompt=p.prompt,
+                        negative_prompt=p.negative_prompt,
+                        )
+                embeddings.append(e)
+                p.embeddings = PromptEmbeddings(e)
+
+            length = len(prompt.prompts)
+            bs_embed, seq_len, _ = embeddings[0].shape
+            embeddings = torch.cat(embeddings, dim=1)
+            embeddings = embeddings.view(bs_embed * length, seq_len, -1)
+
+        else:
+            embeddings = self.encode(
+                    prompt=prompt.prompt,
+                    negative_prompt=prompt.negative_prompt,
+                    )
+
+        prompt.embeddings = PromptEmbeddings(embeddings=embeddings)
+        return prompt
+

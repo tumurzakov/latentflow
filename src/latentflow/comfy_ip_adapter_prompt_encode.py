@@ -43,12 +43,15 @@ class ComfyIPAdapterPromptEncode(Flow):
         self.noise = noise
         self.pipe = pipe
         self.weight = weight
-        self.device = self.pipe.unet.device
-        self.dtype = self.pipe.unet.dtype
+
+        self.model = None
+        if pipe is not None:
+            self.device = self.pipe.unet.device
+            self.dtype = self.pipe.unet.dtype
+            self.model = ModelPatcher(pipe.unet, load_device='cuda', offload_device='cpu')
 
         self.tensor_cache = {}
 
-        self.model = ModelPatcher(pipe.unet, load_device='cuda', offload_device='cpu')
         self.ip_adapter = IPAdapterModelLoader().load_ipadapter_model(ip_adapter_path)[0]
         self.clip_vision = None
         if clip_path is not None:
@@ -73,7 +76,8 @@ class ComfyIPAdapterPromptEncode(Flow):
                 insightface=self.insightface,
                 )
 
-        self.set_ip_adapter()
+        if pipe is not None:
+            self.set_ip_adapter()
 
     def set_ip_adapter(self):
         unet = self.pipe.unet
@@ -135,7 +139,7 @@ class ComfyIPAdapterPromptEncode(Flow):
                     if h in self.tensor_cache:
                         e = self.tensor_cache[h]
                     else:
-                        e = self.encode(p, image)
+                        e = self.encode(p.embeddings.embeddings, image)
                         self.tensor_cache[h] = e
                 except:
                     e = prompt.prompts[i-1].embeddings.embeddings
@@ -151,7 +155,7 @@ class ComfyIPAdapterPromptEncode(Flow):
             self.tensor_cache = {}
         else:
             image = self.video.hwc()[0][:1]/255.0
-            embeddings = self.encode(prompt, image)
+            embeddings = self.encode(prompt.embeddings.embeddings, image)
 
         prompt.embeddings = PromptEmbeddings(embeddings)
         return prompt
@@ -162,7 +166,7 @@ class ComfyIPAdapterPromptEncode(Flow):
                 attn_processor.scale = scale
 
     @torch.inference_mode()
-    def encode(self, prompt, image):
+    def encode(self, embeddings, image):
 
         cond_image_embeddings, uncond_image_embeddings = self.ip_adapter_apply.encode(
                 self.ip_adapter,
@@ -176,8 +180,8 @@ class ComfyIPAdapterPromptEncode(Flow):
 
         cond_embeddings = cond_image_embeddings
         uncond_embeddings = uncond_image_embeddings
-        if prompt.embeddings is not None:
-            uncond_embeddings, cond_embeddings = prompt.embeddings.embeddings.chunk(2)
+        if embeddings is not None:
+            uncond_embeddings, cond_embeddings = embeddings.chunk(2)
             cond_embeddings = torch.cat([cond_embeddings, cond_image_embeddings], dim=1)
             uncond_embeddings = torch.cat([uncond_embeddings, uncond_image_embeddings], dim=1)
 

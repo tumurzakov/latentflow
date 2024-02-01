@@ -41,6 +41,14 @@ class Info(Log):
                 callback=callback,
                 )
 
+class Error(Log):
+    def __init__(self, comment="", callback=None):
+        super().__init__(
+                level=logging.ERROR,
+                comment=comment,
+                callback=callback,
+                )
+
 
 class DebugHash(Flow):
     def __init__(self, comment="", callback=None):

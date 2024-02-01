@@ -16,7 +16,7 @@ class A1111PromptEncode(Flow):
 
     @torch.no_grad()
     def apply(self, prompt: Prompt):
-        logging.debug(f"A1111PromptEncode apply {prompt}")
+        logging.debug(f"CompelPromptEncode apply {prompt}")
 
         if prompt.prompts is not None:
 
@@ -27,8 +27,12 @@ class A1111PromptEncode(Flow):
                         negative_prompt=p.negative_prompt,
                         )
                 embeddings.append(e)
-            embeddings = torch.stack(embeddings)
-            embeddings = rearrange(embeddings, 'f b n c -> (b f) n c')
+                p.embeddings = PromptEmbeddings(e)
+
+            length = len(prompt.prompts)
+            bs_embed, seq_len, _ = embeddings[0].shape
+            embeddings = torch.cat(embeddings, dim=1)
+            embeddings = embeddings.view(bs_embed * length, seq_len, -1)
 
         else:
             embeddings = self.encode(
@@ -36,8 +40,9 @@ class A1111PromptEncode(Flow):
                     negative_prompt=prompt.negative_prompt,
                     )
 
+        prompt.embeddings = PromptEmbeddings(embeddings=embeddings)
+        return prompt
 
-        return PromptEmbeddings(embeddings=embeddings)
 
     def encode(self, prompt, negative_prompt):
         cond_embeddings, uncond_embeddings = text_embeddings(

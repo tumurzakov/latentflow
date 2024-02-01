@@ -15,14 +15,32 @@ class SimplePromptEncode(Flow):
 
     @torch.no_grad()
     def apply(self, prompt: Prompt):
-        logging.debug(f"SimplePromptEncode apply {prompt}")
+        logging.debug(f"CompelPromptEncode apply {prompt}")
 
-        embeddings = self.encode(
-                prompt=prompt.prompt,
-                negative_prompt=prompt.negative_prompt,
-                )
+        if prompt.prompts is not None:
 
-        return PromptEmbeddings(embeddings=embeddings)
+            embeddings = []
+            for i, p in enumerate(prompt.prompts):
+                e = self.encode(
+                        prompt=p.prompt,
+                        negative_prompt=p.negative_prompt,
+                        )
+                embeddings.append(e)
+                p.embeddings = PromptEmbeddings(e)
+
+            length = len(prompt.prompts)
+            bs_embed, seq_len, _ = embeddings[0].shape
+            embeddings = torch.cat(embeddings, dim=1)
+            embeddings = embeddings.view(bs_embed * length, seq_len, -1)
+
+        else:
+            embeddings = self.encode(
+                    prompt=prompt.prompt,
+                    negative_prompt=prompt.negative_prompt,
+                    )
+
+        prompt.embeddings = PromptEmbeddings(embeddings=embeddings)
+        return prompt
 
     def encode(self, prompt, negative_prompt, num_videos_per_prompt=1):
         batch_size = len(prompt) if isinstance(prompt, list) else 1
