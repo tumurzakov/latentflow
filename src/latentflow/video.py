@@ -19,6 +19,7 @@ class Video(Flow):
             video: torch.Tensor = None,
             device: Optional[Union[str, torch.device]] = None,
             ):
+
         self.video = video
         if mode == 'CHW':
             self.video = rearrange(self.video, 'b f c h w -> b f h w c')

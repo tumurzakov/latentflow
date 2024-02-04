@@ -28,7 +28,7 @@ class VideoLoad(Flow):
 
         logging.debug('VideoLoad init %s', path)
 
-    def apply(self, other) -> Video:
+    def apply(self, other=None) -> Video:
         logging.debug('VideoLoad apply %s', self.path)
 
         path = self.path

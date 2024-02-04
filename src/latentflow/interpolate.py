@@ -26,6 +26,7 @@ class Interpolate(Flow):
         t = F.interpolate(
                 t,
                 scale_factor = self.scale_factor,
+                size = self.size,
                 mode=self.mode,
                 align_corners=self.align_corners,
                 recompute_scale_factor=self.recompute_scale_factor,

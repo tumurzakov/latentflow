@@ -48,4 +48,5 @@ from latentflow.video_vae import VideoVae
 from latentflow.animatediff_pipeline import AnimateDiffPipeline
 from animatediff.pipelines.pipeline_animation import AnimationPipeline
 from latentflow.comfy_ip_adapter_prompt_encode import ComfyIPAdapterPromptEncode
+from latentflow.adain import Adain
 
