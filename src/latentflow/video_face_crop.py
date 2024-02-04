@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from .flow import Flow
 from .video import Video
 
+from IPython.display import display
 from PIL import Image
 from facenet_pytorch import MTCNN, InceptionResnetV1
 from einops import rearrange
@@ -63,6 +64,9 @@ class VideoFaceCrop(Flow):
                 x1 = x1 + pw
                 y0 = y0 - ph
                 y1 = y1 + ph
+
+                x0 = x0 if x0 > 0 else 0
+                y0 = y0 if y0 > 0 else 0
 
                 face = f[y0:y1,x0:x1,:]
 

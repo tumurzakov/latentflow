@@ -10,19 +10,19 @@ from .state import State
 class Noise(Flow):
     def __init__(self,
             scheduler:Optional[SchedulerInput]=None,
-            device: Optional[Union[str, torch.device]] = None,
+            scale: Optional[int] = 1.0,
             ):
         self.scheduler = scheduler
-        self.device = device
+        self.scale = scale
 
-        logging.debug('Noise init %s', self.device)
+        logging.debug('Noise init %s', scale)
 
     def apply(self, latent: Latent) -> Latent:
         latents = latent.latent
-        latents = torch.randn_like(latents).to(self.device)
-        latents = latents * self.scheduler.init_noise_sigma
-        latents = latents.to(self.device)
-        latent.latent = latents
+        noise = torch.randn_like(latents).to(latents.device)
+        noise = noise * self.scheduler.init_noise_sigma
+
+        latent.latent = latents * (1.0-self.scale) + noise * self.scale
 
         logging.debug('Noise apply noised %s', latent)
 

@@ -65,3 +65,5 @@ class State(Flow):
     def __str__(self):
         return f'State({self.state.keys()})'
 
+
+class Context(State): ...

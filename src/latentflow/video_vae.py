@@ -9,10 +9,15 @@ from safetensors.torch import load_file as load_safetensors
 import math
 from tqdm import tqdm
 
-class VideoVae:
-    def __init__(self, config_path, weights_path, device, dtype):
+from .flow import Flow
+from .latent import Latent
+from .video import Video
+
+class VideoVae(Flow):
+    def __init__(self, config_path, weights_path, device='cuda', dtype=torch.float16, vae_batch=12):
         self.device = device
         self.dtype = dtype
+        self.vae_batch = vae_batch
 
         sd = load_safetensors(weights_path)
         prefix = 'first_stage_model.decoder.'
@@ -27,8 +32,21 @@ class VideoVae:
         config = OmegaConf.load(config_path)
         decoder = instantiate_from_config(config)
         m, e = decoder.load_state_dict(weights, strict=False)
-        print("missing:", len(m), "expected:", len(e))
+        logging.debug("VideoVae missing %s expected: %s", len(m), len(e))
         self.decoder = decoder.eval().to(device, dtype=dtype)
+
+    def __call__(self, vae_batch):
+        self.vae_batch = vae_batch
+
+    def apply(self, latent):
+        logging.debug('VideoVae apply latent %s', latent)
+
+        v = self.decode(latent.latent, self.vae_batch)
+        v = rearrange(v, 'b c f h w -> b f h w c')
+        video = Video('HWC', video=v)
+
+        logging.debug('VideoVae apply video %s', video)
+        return video
 
     def decode(self, latents, n_samples=12):
         video_length = latents.shape[2]

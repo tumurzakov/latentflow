@@ -147,7 +147,6 @@ class TileGenerator(Flow):
             latent: Latent,
             do_classifier_free_guidance=True,
             pixel_infer_count=None,
-            loop_control=1000,
             *args,
             **kwargs):
 
@@ -155,7 +154,6 @@ class TileGenerator(Flow):
 
         self.tile = tile
         self.latent = latent
-        self.latent_shape = self.latent.latent.shape
 
         self.do_classifier_free_guidance = do_classifier_free_guidance
 
@@ -169,100 +167,13 @@ class TileGenerator(Flow):
         self.tiles = []
         self.audit = torch.zeros_like(latent.latent).int()
 
-        self.loop_control = loop_control
-        self.simple(self.tile)
+        self.generate()
 
         self._index = 0
 
         self.cover = self.audit.sum() / self.audit.numel()
         logging.debug("TileGenerator tiles [%s] cover=%s",
                 len(self.tiles), self.cover.item())
-
-    def append_tile(self, tile):
-        shape = self.latent_shape
-
-        lslice = tile[2]
-        if lslice.stop > shape[2]:
-            diff = lslice.stop - shape[2]
-            lslice = slice(lslice.start-diff, lslice.stop-diff)
-
-            tile = (
-                    tile[0],
-                    tile[1],
-                    lslice,
-                    tile[3],
-                    tile[4],
-                    )
-
-        if self.audit[tile].numel() > 0 \
-            and self.audit[tile].sum() != self.audit[tile].numel():
-
-            bslice = tile[0]
-            if self.do_classifier_free_guidance:
-                bslice = slice(tile[0].start*2, tile[0].stop*2)
-                tile = (
-                        bslice,
-                        tile[1],
-                        lslice,
-                        tile[3],
-                        tile[4],
-                        )
-
-            self.tiles.append(tile)
-            self.audit[tile] = 1
-            self.pixel_infer_count[tile] += 1
-
-    def simple(self, tile):
-        logging.debug("TileGenerator simple %s", tile)
-
-        shape = self.latent.latent.shape
-
-        for b in range(0, shape[0]):
-
-            l_start = 0
-            l_end = tile.length
-
-            while l_start <= shape[2]:
-
-                h_start = 0
-                h_end = tile.height
-
-                while h_start <= shape[3]:
-
-                    w_start = 0
-                    w_end = tile.width
-
-                    while w_start <= shape[4]:
-                        self.loop_control -= 1
-                        if self.loop_control < 0:
-                            logging.error("Infinite loop detected l%s-%s, h%s-%s, w%s-%s",
-                                    l_start, l_end, h_start, h_end, w_start, w_end)
-                            raise Exception("Infinite loop detected")
-
-                        self.append_tile((
-                            slice(b, b + 1),
-                            slice(0, 4),
-                            slice(l_start, l_end),
-                            slice(h_start, h_end),
-                            slice(w_start, w_end),
-                            ))
-
-                        overlap = tile.width - tile.width_overlap
-                        offset = overlap - tile.length_offset % overlap
-                        w_start += offset
-                        w_end += offset
-
-                    overlap = tile.height - tile.height_overlap
-                    offset = overlap - tile.height_offset % overlap
-                    h_start += offset
-                    h_end += offset
-
-                overlap = tile.length - tile.length_overlap
-                offset = overlap - tile.length_offset % overlap
-                l_start += offset
-                l_end += offset
-
-        logging.info("GenerateTiles simple %s", len(self.tiles))
 
     def __len__(self):
         return len(self.tiles) if self.tiles is not None else 0
@@ -277,9 +188,76 @@ class TileGenerator(Flow):
     def __next__(self):
         if self._index < len(self.tiles):
             tile = self.tiles[self._index]
-            logging.debug("TileGenerator next %s %s", self._index, tile)
+            logging.debug("UniformFrameGenerator next %s %s", self._index, tile)
             self._index += 1
 
             return tile
         else:
             raise StopIteration
+
+    def append_tile(self, tile):
+        if self.audit[tile].sum() == self.audit[tile].numel():
+            return
+
+        if self.do_classifier_free_guidance:
+            bslice = slice(tile[0].start*2, tile[0].stop*2)
+            tile = (
+                    bslice,
+                    tile[1],
+                    tile[2],
+                    tile[3],
+                    tile[4],
+                    )
+
+        self.tiles.append(tile)
+        self.audit[tile] = 1
+        self.pixel_infer_count[tile] += 1
+
+    def check_tile(self, t, s):
+        ok = True
+        for i, k in enumerate(t):
+            if isinstance(k, slice):
+                ok = ok and (
+                        k.start != k.stop
+                        and k.start >= 0
+                        and k.stop <= s[i]
+                        )
+        return ok
+
+    def generate(self):
+        s = self.latent.latent.shape
+        t = self.tile
+
+        for l in range(-t.length, s[2]+t.length, t.length-t.length_overlap):
+            for h in range(-t.height, s[3]+t.height, t.height-t.height_overlap):
+                for w in range(-t.width, s[4]+t.width, t.width-t.height_overlap):
+
+                    l_start = l + t.length_offset
+                    l_end = l + t.length + t.length_offset
+                    l_list = list([x%s[2] for x in range(l_start, l_end)])
+                    l_list = [ s[2]+x if x<0 else x for x in l_list ]
+
+                    h_start = h + t.height_offset
+                    h_end = h + t.height + t.height_offset
+                    if h_start < 0:
+                        h_start = 0
+                    if h_end > s[3]:
+                        h_end = s[3]
+
+                    w_start = w + t.width_offset
+                    w_end = w + t.width + t.width_offset
+                    if w_start < 0:
+                        w_start = 0
+                    if w_end > s[4]:
+                        w_end = s[4]
+
+                    tile = (
+                        slice(0,s[0]),
+                        slice(0,s[1]),
+                        l_list,
+                        slice(h_start, h_end),
+                        slice(w_start, w_end),
+                    )
+
+                    if self.check_tile(tile, s):
+                        self.append_tile(tile)
