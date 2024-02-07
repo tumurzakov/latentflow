@@ -16,7 +16,7 @@ class RESRGANUpscale(Flow):
         self.model_path = model_path
         self.scale = scale
 
-    def apply(self, other):
+    def apply(self, other: Video) -> Video:
 
         video = upscale(other.hwc(), self.model_path, scale=self.scale)
 

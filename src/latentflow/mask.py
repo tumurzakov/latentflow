@@ -16,8 +16,14 @@ class Mask(Flow):
     def __str__(self):
         return f'Mask({self.mask.shape})'
 
+    def __getitem__(self, key):
+        return Mask(self.mask[key])
+
     def size(self):
         return (self.mask.shape[2], self.mask.shape[3])
+
+    def invert(self):
+        return Mask(1-self.mask)
 
     def resize(self, size):
         v = self.mask

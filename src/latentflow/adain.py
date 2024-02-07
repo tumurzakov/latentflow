@@ -36,7 +36,18 @@ def adaptive_instance_normalization(content_feat, style_feat):
     return normalized_feat * style_std.expand(size) + style_mean.expand(size)
 
 class Adain(Flow):
-    def __init__(self, style):
+    r"""
+    Arbitrary Style Transfer
+
+    https://arxiv.org/abs/1703.06868
+
+    (state['video']
+        | Adain(f'{data}/ref.png')
+        > state("video")
+        ) >> \
+    """
+
+    def __init__(self, style: str):
         self.style = style
 
         if isinstance(style, str):
@@ -46,7 +57,7 @@ class Adain(Flow):
             elif '.mp4' in latents_adain_path:
                 self.style = VideoLoad(self.style).apply()
 
-    def apply(self, video):
+    def apply(self, video: Video) -> Video:
 
         vid = video.hwc()
         video_length = vid.shape[1]

@@ -48,9 +48,13 @@ class VideoFaceCrop(Flow):
                 if self.size is not None:
                     back = torch.zeros((self.size[0], self.size[1], 3), device=f.device, dtype=f.dtype)
 
-                if len(boxes) == 0:
-                    back = frames[-1]
-                    frames.append(torch.tensor(back))
+                if boxes is None or len(boxes) == 0:
+                    if len(frames) > 0 and frames[-1] is not None:
+                        back = frames[-1]
+                        frames.append(torch.tensor(back))
+                    else:
+                        frames.append(None)
+
                     continue
 
                 box = boxes[0]
@@ -71,8 +75,12 @@ class VideoFaceCrop(Flow):
                 face = f[y0:y1,x0:x1,:]
 
                 if face.shape[0] == 0 or face.shape[1] == 0:
-                    back = frames[-1]
-                    frames.append(torch.tensor(back))
+                    if len(frames) > 0 and frames[-1] is not None:
+                        back = frames[-1]
+                        frames.append(torch.tensor(back))
+                    else:
+                        frames.append(None)
+
                     continue
 
                 if self.zoom:
@@ -117,6 +125,15 @@ class VideoFaceCrop(Flow):
                     back[y0:y1,x0:x1,:] = face
 
                 frames.append(torch.tensor(back))
+
+            for fi, f in enumerate(frames):
+                if f is None:
+                    for ni in range(fi, len(frames)):
+                        if frames[ni] is not None:
+                            frames[fi] = frames[ni]
+
+                    if frames[fi] is None:
+                        raise Exception("Face not found")
 
             frames = torch.stack(frames)
             batches.append(frames)

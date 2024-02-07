@@ -105,11 +105,17 @@ class ControlNet(Flow):
         latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep)
 
         controlnet_images = self.controlnet_images
-        controlnet_images = controlnet_images.to(
+        if not isinstance(controlnet_images, list):
+            controlnet_images = [controlnet_images]
+
+        for i, image in enumerate(controlnet_images):
+            controlnet_images[i] = controlnet_images[i].squeeze(0)
+            controlnet_images[i] = controlnet_images[i].to(
                 device=self.controlnet.device,
                 dtype=self.controlnet.dtype)
 
-        logging.debug("ControlNet images %s %s", controlnet_images.shape, controlnet_images.dtype)
+            logging.debug("ControlNet images %s %s %s", i, controlnet_images[i].shape, controlnet_images[i].dtype)
+
         logging.debug("ControlNet embeddings %s %s", embeddings.shape, embeddings.dtype)
         logging.debug("ControlNet latents %s %s", latent_model_input.shape, latent_model_input.dtype)
 
@@ -140,6 +146,13 @@ class ControlNet(Flow):
                 temporal_context,
                 self.do_classifier_free_guidance,
                 )
+
+        if isinstance(latent, ControlNetLatent):
+            down_block_res_samples = [
+                samples_prev + samples_curr
+                for samples_prev, samples_curr in zip(down_block_res_samples, latent.down_block_res_samples)
+            ]
+            mid_block_res_sample += latent.mid_block_res_sample
 
         return ControlNetLatent(latent, down_block_res_samples, mid_block_res_sample)
 
@@ -177,7 +190,8 @@ class ControlNet(Flow):
             cond_scale = controlnet_cond_scale * controlnet_keep[step_index]
 
         if do_classifier_free_guidance and not guess_mode:
-            controlnet_image = controlnet_image.repeat(1,2,1,1,1)
+            for i, _ in enumerate(controlnet_image):
+                controlnet_image[i] = controlnet_image[i].repeat(2,1,1,1)
 
         control_model_input = rearrange(control_model_input, "b c f h w -> (b f) c h w")
 

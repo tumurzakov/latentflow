@@ -19,15 +19,26 @@ class VideoRembg(Flow):
         if self.cache is not None and os.path.isfile(self.cache):
             v = torch.load(self.cache).to(video.video.device)
         else:
-            v = self.process(video)
-            torch.save(v, self.cache)
+            v = self.process(video.hwc())
+            if self.cache is not None:
+                torch.save(v, self.cache)
 
-        return Video('HWC', v)
+        shape = video.video.shape
+        mate = v[
+                :shape[0],
+                :shape[1],
+                :shape[2],
+                :shape[3],
+                :shape[4],
+                ]
+
+        output = Video('HWC', mate)
+        logging.debug("VideoRembg %s %s", video, output)
+        return output
 
     @torch.no_grad()
-    def process(self, video):
+    def process(self, v):
         batches = []
-        v = video.hwc()
         for b in v:
             frames = []
             for f in tqdm(b, desc=f'rembg'):
@@ -43,4 +54,5 @@ class VideoRembg(Flow):
 
         batches = torch.stack(batches)
         batches = batches.to(v.device)
+
         return batches

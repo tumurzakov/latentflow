@@ -43,7 +43,7 @@ class Video(Flow):
         return (self.video.shape[2], self.video.shape[3])
 
     def save(self, path, fps):
-        self.write_video_cv2(self.chw(), path, fps)
+        self.write_video_cv2(self.hwc(), path, fps)
         return self
 
     def resize(self, size):

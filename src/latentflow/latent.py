@@ -96,15 +96,20 @@ class NoisePredict(Latent):
     pass
 
 class LatentAdd(Flow):
-    def __init__(self, latent, key=None):
+    def __init__(self, latent, key=None, mask=None):
         self.latent = latent
         self.key = key
+        self.mask = mask
 
     def apply(self, other):
-        logging.debug("LatentAdd.apply %s[%s] %s", self.latent, self.key, other)
+        logging.debug("LatentAdd.apply %s[%s] %s %s", \
+                self.latent, self.key, other, self.mask)
 
         s = self.latent.latent
         l = other.latent
+
+        if self.mask is not None:
+            l = l * self.mask.mask
 
         if self.key is not None:
             s[self.key] += l

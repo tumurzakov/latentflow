@@ -1,3 +1,4 @@
+import os
 import logging
 import torch
 from .flow import Flow
@@ -21,7 +22,10 @@ class PromptEmbeddings(Flow):
         return self
 
     def load(self, path):
-        self.embeddings = torch.load(path)
+
+        if os.path.isfile(path):
+            self.embeddings = torch.load(path)
+
         return self
 
     def __getitem__(self, key):

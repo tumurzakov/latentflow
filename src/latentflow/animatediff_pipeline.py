@@ -27,9 +27,14 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
             controlnet_paths=[],
             motion_module_config_path=None,
             extra_tokens=None,
+            device='cuda',
             *args,
             **kwargs,
             ):
+
+        dtype = torch.float32
+        if 'fp16' in kwargs:
+            dtype = torch.float16
 
         controlnet = None
         if controlnet_paths is not None:
@@ -37,7 +42,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
             for controlnet_path in controlnet_paths:
                 logging.debug("AnimateDiffPipelineLoad load cnet %s", controlnet_path)
                 controlnet.append(
-                    ControlNetModel.from_pretrained(controlnet_path, torch_dtype=torch.float16)
+                    ControlNetModel.from_pretrained(controlnet_path, torch_dtype=dtype)
                 )
 
         return cls.load_pipeline(
@@ -50,6 +55,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
             scheduler_class=scheduler_class,
             extra_tokens=extra_tokens,
             controlnet=controlnet,
+            device=device,
             *args,
             **kwargs,
         )
@@ -89,6 +95,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         scheduler_config_extra = None,
         extra_tokens = None,
         controlnet = [],
+        device = 'cuda',
         *args,
         **kwargs,
     ):
@@ -172,6 +179,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         missing, unexpected = pipeline.unet.load_state_dict(motion_module_state_dict, strict=False)
         assert len(unexpected) == 0
 
-        pipeline.unet = pipeline.unet.half()
+        if 'fp16' in kwargs and kwargs['fp16']:
+            pipeline.unet = pipeline.unet.half()
 
-        return pipeline.to('cuda')
+        return pipeline.to(device)
