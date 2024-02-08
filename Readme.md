@@ -26,38 +26,38 @@ This framework mostly for video generation.
 
 ```python
 
-import torch
 import latentflow as lf
 
 pipe = lf.AnimateDiffPipeline.load(
-    pretrained_model_path=f'{models}/stable_diffusion-v1-5',
+    pretrained_model_path=f'{models}/stable-diffusion-v1-5',
     motion_module_path=f'{models}/mm_sd_v15_v2.ckpt',
-    motion_module_config_path=f'{models}/inference.yaml',
+    motion_module_config_path=f'{models}/mm_sd_v15_v2.yaml',
     scheduler_class_name='EulerDiscreteScheduler',
+    fp16=False,
+    xformers=False,
 )
 
 state = lf.State({
     'width': 512,
-    'height': 512,
+    'height': 288,
     'video_length': 16,
-    'num_inference_steps': 10,
+    'num_inference_steps': 20,
+    'prompt': 'a cat walking down city street',
+    'fps': 16,
 })
 
-(video = \
-    (lf.Latent(shape=(1,4,state['video_length'],state['width']//8,state['height']//8), device='cuda')
-        | lf.Noise(scheduler=pipe.scheduler)
-        | lf.LatentShow(fps=16, vae=pipe.vae.to('cuda'))
-        > state("latent")
-        ) >> \
-
-    (state['latent'] \
-        | lf.Pipeline(
-            pipe=pipe,
+video = (
+    (lf.Latent()
+        | pipe(
             num_inference_steps=state['num_inference_steps'],
-            prompt='a cat walking down city street',
+            prompt=state['prompt'],
+            video_length=state['video_length'],
+            temporal_context=state['video_length'],
+            width=state['width'],
+            height=state['height'],
         )
-        | lf.VaeLatentDecode(vae=pipe.vae)
-        | lf.VideoShow(fps=16)
+        | lf.VaeLatentDecode(vae=pipe.vae, vae_batch=4)
+        | lf.VideoShow(fps=state['fps'])
         )
 )
 ```

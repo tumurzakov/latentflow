@@ -1,0 +1,17 @@
+diffusers
+transformers
+einops
+git+https://github.com/openai/CLIP.git
+torchvision
+compel
+mediapy
+OmegaConf
+accelerate
+xformers
+decord[torch]
+pytorch_lightning
+basicsr
+facenet-pytorch
+rembg
+open-clip-torch
+kornia
