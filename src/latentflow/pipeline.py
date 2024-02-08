@@ -21,14 +21,22 @@ class Pipeline(Flow):
                     device=self.pipe.unet.device,
                     dtype=self.pipe.unet.dtype)
 
-        kwargs['output_type'] = 'latent'
+        if 'output_type' not in kwargs:
+            kwargs['output_type'] = 'latent'
 
-        result = self.pipe(**kwargs)
+        if hasattr('__orig_call__', self.pipe):
+            result = self.pipe.__orig_call__(**kwargs)
+        else:
+            result = self.pipe(**kwargs)
 
-        if isinstance(result, tuple):
-            result = result[0]
+        assert result is not None, "pipeline result should not be none"
 
         if self.callback is not None:
             result=self.callback(result)
+
+        elif isinstance(result, tuple):
+            result = result[0]
+
+        logging.debug("Pipeline result %s", result.shape)
 
         return Latent(result)

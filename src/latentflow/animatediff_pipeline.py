@@ -14,6 +14,7 @@ from diffusers.utils.import_utils import is_xformers_available
 from omegaconf import OmegaConf
 
 from .flow import Flow
+from .latent import Latent
 
 class AnimateDiffPipeline(AnimationPipeline, Flow):
     @classmethod
@@ -64,24 +65,30 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
 
     def __call__(self, **kwargs):
         self.call_kwargs = kwargs
+        return self
 
-    def apply(self, other):
+    def apply(self, latent: Latent) -> Latent:
         kwargs = self.call_kwargs
 
         logging.debug("AnimateDiffPipeline %s %s",
                 latent, type(self))
 
-        if isinstance(latent, Latent) and 'latents' not in kwargs:
+        if isinstance(latent, Latent) \
+                and latent.latent is not None \
+                and 'latents' not in kwargs:
             kwargs['latents'] = latent.latent.to(
                     device=self.unet.device,
                     dtype=self.unet.dtype)
 
         kwargs['output_type'] = 'latent'
 
-        result = self.__orig_call__(**kwargs)
+        with torch.no_grad():
+            result = self.__orig_call__(**kwargs)
 
         if isinstance(result, tuple):
             result = result[0]
+
+        logging.debug("Pipeline result %s", result.shape)
 
         return Latent(result)
 
@@ -102,6 +109,10 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         *args,
         **kwargs,
     ):
+        dtype = torch.float32
+        if 'fp16' in kwargs:
+            dtype = torch.float16
+
         if motion_module_config_path is None:
             motion_module_config_path = f'{motion_module_path}/inference.yaml'
 
@@ -145,7 +156,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
                 subfolder="unet",
                 unet_additional_kwargs=OmegaConf.to_container(motion_module_config.unet_additional_kwargs))
 
-        if is_xformers_available():
+        if is_xformers_available() and ('xformers' not in kwargs or kwargs['xformers']):
             unet.enable_xformers_memory_efficient_attention()
 
         if scheduler_class_name is None:
@@ -168,7 +179,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         scheduler_class = getattr(diffusers, scheduler_class_name)
         scheduler = scheduler_class(**scheduler_config)
 
-        cls.__orig_call__ = cls.__call__
+        cls.__orig_call__ = AnimationPipeline.__call__
 
         pipeline = cls(
                 unet=unet,
