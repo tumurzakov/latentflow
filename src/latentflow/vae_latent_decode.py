@@ -2,7 +2,7 @@ import torch
 import logging
 from einops import rearrange
 
-from diffusers import AutoencoderKL
+from diffusers import AutoencoderKL, AutoencoderKLTemporalDecoder
 from diffusers.image_processor import VaeImageProcessor
 
 from .latent_decode import LatentDecode
@@ -37,10 +37,15 @@ class VaeLatentDecode(LatentDecode):
         latents = 1 / 0.18215 * latents
         latents = rearrange(latents, "b c f h w -> (b f) c h w")
 
+        kwargs = {}
+        if isinstance(self.vae, AutoencoderKLTemporalDecoder):
+            kwargs['num_frames'] = self.vae_batch
+
         video = []
         for frame_idx in range(0, latents.shape[0], self.vae_batch):
             video.append(self.vae.decode(
-                latents[frame_idx:frame_idx+self.vae_batch]
+                latents[frame_idx:frame_idx+self.vae_batch],
+                **kwargs,
                 ).sample)
 
         video = torch.cat(video)

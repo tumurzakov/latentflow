@@ -8,7 +8,7 @@ from animatediff.models.unet import UNet3DConditionModel
 
 from diffusers import ControlNetModel
 from transformers import CLIPTextModel, CLIPTokenizer
-from diffusers import AutoencoderKL
+from diffusers import AutoencoderKL, AutoencoderKLTemporalDecoder
 from animatediff.utils.convert_from_ckpt import convert_ldm_unet_checkpoint, convert_ldm_vae_checkpoint, convert_ldm_clip_checkpoint
 from diffusers.utils.import_utils import is_xformers_available
 from omegaconf import OmegaConf
@@ -23,6 +23,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
             unet_path=None,
             text_encoder_path=None,
             vae_path=None,
+            vae_is_svd = False,
             scheduler_class=None,
             controlnet_paths=[],
             motion_module_config_path=None,
@@ -52,6 +53,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
             text_encoder_path=text_encoder_path,
             unet_path=unet_path,
             vae_path=vae_path,
+            vae_is_svd=vae_is_svd,
             scheduler_class=scheduler_class,
             extra_tokens=extra_tokens,
             controlnet=controlnet,
@@ -91,6 +93,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         text_encoder_path = None,
         unet_path = None,
         vae_path = None,
+        vae_is_svd = False,
         scheduler_class_name = None,
         scheduler_config_extra = None,
         extra_tokens = None,
@@ -125,12 +128,16 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         logging.debug("AnimateDiffPipelineLoad text_encoder %s", text_encoder_path)
         text_encoder = CLIPTextModel.from_pretrained(text_encoder_path, subfolder="text_encoder").to('cuda')
 
-        try:
+        if vae_is_svd:
             logging.debug("AnimateDiffPipelineLoad vae %s", vae_path)
-            vae = AutoencoderKL.from_pretrained(vae_path, subfolder="vae").to('cuda')
-        except:
-            logging.debug("AnimateDiffPipelineLoad vae %s", vae_path)
-            vae = AutoencoderKL.from_pretrained(vae_path).to('cuda')
+            vae = AutoencoderKLTemporalDecoder.from_pretrained(vae_path, subfolder="vae").to('cuda')
+        else:
+            try:
+                logging.debug("AnimateDiffPipelineLoad vae %s", vae_path)
+                vae = AutoencoderKL.from_pretrained(vae_path, subfolder="vae").to('cuda')
+            except:
+                logging.debug("AnimateDiffPipelineLoad vae %s", vae_path)
+                vae = AutoencoderKL.from_pretrained(vae_path).to('cuda')
 
         logging.debug("AnimateDiffPipelineLoad unet %s", unet_path)
         unet = UNet3DConditionModel.from_pretrained_2d(

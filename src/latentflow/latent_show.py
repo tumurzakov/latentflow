@@ -5,7 +5,6 @@ import numpy as np
 from .flow import Flow
 from .latent import Latent
 from .vae_latent_decode import VaeLatentDecode
-from .video_vae_latent_decode import VideoVaeLatentDecode
 from .video_show import VideoShow
 
 class LatentShow(Flow):
@@ -16,7 +15,7 @@ class LatentShow(Flow):
             callback=None
             ):
         self.fps = fps
-        self.vae_decode = VideoVaeLatentDecode(vae=vae, vae_batch=vae_batch)
+        self.vae_decode = VaeLatentDecode(vae=vae, vae_batch=vae_batch)
         self.video_show = VideoShow(fps=fps)
         self.callback = callback
 
