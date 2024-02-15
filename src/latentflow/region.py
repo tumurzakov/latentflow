@@ -4,7 +4,7 @@ from typing import Callable, List, Optional, Tuple, Union, Generator
 
 from .latent import Latent, NoisePredict
 from .flow import Flow
-from .prompt_embeddings import PromptEmbeddings
+from .prompt import Prompt
 from .mask import Mask
 from .video import Video
 from .timesteps import Timesteps
@@ -30,8 +30,8 @@ class Region(Flow):
         self.latent = latent
         self.timesteps = Timesteps()
 
-    def apply(self, embeddings: PromptEmbeddings):
-        self.embeddings = embeddings
+    def apply(self, prompt: Prompt):
+        self.prompt = prompt
 
         return self
 
@@ -39,5 +39,5 @@ class Region(Flow):
         return 'Region(%s, %s, %s)' % (
                 self.controlnet_scale,
                 self.mask,
-                self.embeddings,
+                self.prompt,
                 )

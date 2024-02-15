@@ -31,15 +31,18 @@ class ComfyIPAdapterPromptEncode(Flow):
     """
 
     def __init__(self,
-            ip_adapter_path,
-            clip_path=None,
+            ip_adapter_path=None,
+            ip_adapter=None,
+            clip_vision_path=None,
+            clip_vision=None,
+            insightface=None,
             noise=0.0,
             pipe=None,
             weight=1.0,
             ):
 
         self.ip_adapter_path = ip_adapter_path
-        self.image_encoder_path = clip_path
+        self.image_encoder_path = clip_vision_path
         self.noise = noise
         self.pipe = pipe
         self.weight = weight
@@ -52,10 +55,13 @@ class ComfyIPAdapterPromptEncode(Flow):
 
         self.tensor_cache = {}
 
-        self.ip_adapter = IPAdapterModelLoader().load_ipadapter_model(ip_adapter_path)[0]
-        self.clip_vision = None
-        if clip_path is not None:
-            self.clip_vision = comfy.clip_vision.load(clip_path)
+        self.ip_adapter = ip_adapter
+        if self.ip_adapter is None and ip_adapter_path is not None:
+            self.ip_adapter = IPAdapterModelLoader().load_ipadapter_model(ip_adapter_path)[0]
+
+        self.clip_vision = clip_vision
+        if self.clip_vision is None and clip_vision_path is not None:
+            self.clip_vision = comfy.clip_vision.load(clip_vision_path)
 
         is_portrait = "proj.2.weight" in self.ip_adapter["image_proj"] and \
                 not "proj.3.weight" in self.ip_adapter["image_proj"] and \
@@ -63,8 +69,8 @@ class ComfyIPAdapterPromptEncode(Flow):
 
         is_faceid = is_portrait or "0.to_q_lora.down.weight" in self.ip_adapter["ip_adapter"]
 
-        self.insightface = None
-        if is_faceid:
+        self.insightface = insightface
+        if self.insightface is None and is_faceid and clip_vision_path is not None:
             self.insightface = InsightFaceLoader().load_insight_face('CUDA')[0]
 
         self.ip_adapter_apply = IPAdapterApply()

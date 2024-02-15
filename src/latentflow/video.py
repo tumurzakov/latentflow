@@ -9,6 +9,9 @@ import cv2
 import numpy as np
 import logging
 
+from IPython.display import display
+from PIL import Image
+
 class Video(Flow):
     """
     :param mode: str, could be HWC or CWH
@@ -43,7 +46,17 @@ class Video(Flow):
         return (self.video.shape[2], self.video.shape[3])
 
     def save(self, path, fps):
-        self.write_video_cv2(self.hwc(), path, fps)
+        video = self.hwc()
+        assert len(video.shape) == 5, "Must have 5 dims"
+
+        if not isinstance(path, list):
+            path = [path]
+
+        assert len(path) == video.shape[0], "Path count must match batch size"
+
+        for v, p in zip(video, path):
+            self.write_video_cv2(v, p, fps)
+
         return self
 
     def resize(self, size):
@@ -73,8 +86,8 @@ class Video(Flow):
 
         frames = np.array(frames)
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        shape = frames[0].shape
-        frame_size = (shape[1], shape[0])
+        f, h, w, c = frames.shape
+        frame_size = (w, h)
 
         # Create the VideoWriter object
         out = cv2.VideoWriter(output_path, fourcc, fps, frame_size)
@@ -93,18 +106,24 @@ class Video(Flow):
         out.release()
 
 class VideoAdd(Flow):
-    def __init__(self, video, key=None):
+    def __init__(self, video, key=None, mask=None):
         self.video = video
         self.key = key
+        self.mask = mask
 
     def apply(self, other):
-        logging.debug("VideoAdd.apply %s[%s] %s", self.video, self.key, other)
+        logging.debug("VideoAdd.apply %s[%s] %s %s", self.video, self.key, self.mask, other)
 
         s = self.video.video
         l = other.video
 
+        if self.mask is None:
+            m = torch.ones_like(l)
+        else:
+            m = self.mask.mask
+
         if self.key is not None:
-            s[self.key] += l
+            s[self.key] += l*m
         else:
             s[
                 0:l.shape[0],
@@ -112,6 +131,6 @@ class VideoAdd(Flow):
                 0:l.shape[2],
                 0:l.shape[3],
                 0:l.shape[4]
-            ]+= l
+            ]+= l*m
 
         return self.video

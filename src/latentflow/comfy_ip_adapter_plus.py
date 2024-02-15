@@ -738,9 +738,6 @@ class IPAdapterApply:
         self.is_faceid = self.is_portrait or "0.to_q_lora.down.weight" in ipadapter["ip_adapter"]
         self.is_plus = (self.is_full or "latents" in ipadapter["image_proj"] or "perceiver_resampler.proj_in.weight" in ipadapter["image_proj"])
 
-        if self.is_faceid and not insightface:
-            raise Exception('InsightFace must be provided for FaceID models.')
-
         output_cross_attention_dim = ipadapter["ip_adapter"]["1.to_k_ip.weight"].shape[1]
         self.is_sdxl = output_cross_attention_dim == 2048
         cross_attention_dim = 1280 if self.is_plus and self.is_sdxl and not self.is_faceid else output_cross_attention_dim

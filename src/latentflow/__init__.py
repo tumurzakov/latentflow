@@ -24,7 +24,7 @@ from latentflow.lora import LoraOn, LoraOff
 from latentflow.apply import Apply
 from latentflow.controlnet import ControlNet
 from latentflow.loop import Loop
-from latentflow.tile import Tile, TileGenerator, UniformFrameTileGenerator
+from latentflow.tile import Tile, TileGenerator, UniformFrameTileGenerator, AddTileEncoding
 from latentflow.step import Step
 from latentflow.tensor import Tensor,TensorAdd
 from latentflow.mask import MaskEncode, Mask, LatentMaskCut, VideoMaskCut, LatentMaskMerge, LatentMaskCrop
@@ -48,4 +48,5 @@ from animatediff.pipelines.pipeline_animation import AnimationPipeline
 from latentflow.comfy_ip_adapter_prompt_encode import ComfyIPAdapterPromptEncode
 from latentflow.adain import Adain
 from latentflow.pipeline import Pipeline
+from latentflow.sd_upscale import SDUpscale
 

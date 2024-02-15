@@ -37,11 +37,12 @@ class Mask(Flow):
 
 
 class MaskEncode(Flow):
-    def __init__(self, width = None, height = None, threshold = 200, channels=1):
+    def __init__(self, width = None, height = None, threshold = 200, channels=1, mode='b c f h w'):
         self.width = width
         self.height = height
         self.threshold = threshold
         self.channels = channels
+        self.mode = mode
         logging.debug('MaskEncode init')
 
     def apply(self, video: Video) -> Mask:
@@ -52,22 +53,16 @@ class MaskEncode(Flow):
         if self.width is None or self.height is None:
             self.height, self.width = video.size()
 
-        masks = []
-        for m in mask:
-            mask = F.interpolate(
-                    m,
-                    size=(self.height, self.width),
-                    mode='nearest-exact').squeeze()
+        mask = F.interpolate(
+                mask,
+                size=(1, self.height, self.width),
+                mode='nearest-exact').squeeze()
 
-            mask = mask.sum(dim=1)
-            mask = (mask > self.threshold).to(torch.float)
-            mask = mask.unsqueeze(0)
-            mask = mask.unsqueeze(0)
-
-            masks.append(mask)
-
-        mask = torch.cat(masks)
-        mask = mask.repeat(1, self.channels, 1, 1, 1)
+        mask = (mask > self.threshold).to(torch.uint8)
+        mask = mask.unsqueeze(0)
+        mask = mask.unsqueeze(0)
+        mask = mask.repeat(self.channels, 1, 1, 1, 1)
+        mask = rearrange(mask, f'c b f h w -> {self.mode}')
 
         mask = Mask(mask=mask)
 

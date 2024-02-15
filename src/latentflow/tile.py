@@ -5,6 +5,7 @@ import random
 from .flow import Flow
 from .latent import Latent
 from .tensor import Tensor
+from .prompt_embeddings import PromptEmbeddings
 
 import numpy as np
 
@@ -261,3 +262,28 @@ class TileGenerator(Flow):
 
                     if self.check_tile(tile, s):
                         self.append_tile(tile)
+
+class AddTileEncoding(Flow):
+    def __init__(self, tile):
+        self.tile = tile
+
+    def apply(self, embeddings):
+        embeddings = embeddings.embeddings
+        tile = self.tile
+
+        uncond, cond = embeddings.chunk(2)
+
+        tile_cond = torch.zeros_like(cond[:,:1,:])
+        tile_cond[:,:,0:3] = torch.stack([
+            torch.tensor(tile[2][0]),
+            torch.tensor(tile[3].start),
+            torch.tensor(tile[4].start),
+            ])
+
+        tile_uncond = torch.zeros_like(tile_cond)
+        cond = torch.cat([cond, tile_cond], dim=1)
+        uncond = torch.cat([uncond, tile_uncond], dim=1)
+        embeddings = torch.cat([uncond, cond])
+        return PromptEmbeddings(embeddings)
+
+

@@ -1,5 +1,7 @@
 import logging
 from .flow import Flow
+import gc
+import torch
 
 class State(Flow):
     def __init__(self, state: dict = {}):
@@ -15,6 +17,12 @@ class State(Flow):
 
     def update(self, state):
         self.state.update(state)
+        return self
+
+    def clear(self, key):
+        del self.state[key]
+        gc.collect()
+        torch.cuda.empty_cache()
         return self
 
     def set(self, value):

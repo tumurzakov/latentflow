@@ -38,7 +38,7 @@ def realesrgan(model_path, scale=4):
 
 def upscale(video, model_path, scale=None, *args, **kwargs):
 
-    sample = (video*255).detach().cpu().numpy().astype(np.uint8)
+    sample = video.detach().cpu().numpy().astype(np.uint8)
 
     upscaler = realesrgan(model_path, *args, **kwargs)
 

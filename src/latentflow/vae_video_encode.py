@@ -26,6 +26,10 @@ class VaeVideoEncode(VideoEncode):
         self.video_length = video_length
         self.start_frame = start_frame
 
+        cache_dir = os.path.dirname(self.cache)
+        if not os.path.isdir(cache_dir):
+            os.mkdir(cache_dir)
+
         logging.debug('VaeVideoEncode init %d, vae(%s,%s)',
                 vae_batch,
                 vae.device,
