@@ -42,11 +42,19 @@ from latentflow.video_rembg import VideoRembg
 from latentflow.video_face_crop import VideoFaceCrop
 from latentflow.image import LoadImage
 from latentflow.latent_interpolate import LatentInterpolate
-from latentflow.esrgan import RESRGANUpscale
-from latentflow.animatediff_pipeline import AnimateDiffPipeline
-from animatediff.pipelines.pipeline_animation import AnimationPipeline
 from latentflow.comfy_ip_adapter_prompt_encode import ComfyIPAdapterPromptEncode
 from latentflow.adain import Adain
 from latentflow.pipeline import Pipeline
 from latentflow.sd_upscale import SDUpscale
+from latentflow.comfy_node import ComfyNode, ComfyResult
 
+try:
+    from latentflow.animatediff_pipeline import AnimateDiffPipeline
+    from animatediff.pipelines.pipeline_animation import AnimationPipeline
+except:
+    pass
+
+try:
+    from latentflow.esrgan import RESRGANUpscale
+except:
+    pass

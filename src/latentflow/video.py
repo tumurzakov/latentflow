@@ -81,8 +81,11 @@ class Video(Flow):
         return Tensor(self.chw().float()/255.0)
 
     def write_video_cv2(self, frames, output_path, fps):
-        if isinstance(frames, torch.Tensor):
-            frames = frames.detach().cpu().numpy()
+
+        if frames.dtype == torch.float32 and torch.std(frames) < 2.0:
+            frames = (frames * 255).to(torch.uint8)
+
+        frames = frames.detach().cpu().numpy()
 
         frames = np.array(frames)
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')

@@ -2,6 +2,7 @@
 
 ## Changelog
 
+* 2024-02-16 ComfyUI Any node support added
 * 2024-02-07 Constant improvements
 * 2024-01-15 Region prompts added
 * 2024-01-11 Simple tile processing added
@@ -59,5 +60,34 @@ video = (
         | lf.VaeLatentDecode(vae=pipe.vae, vae_batch=4)
         | lf.VideoShow(fps=state['fps'])
         )
+)
+```
+
+### ComfyUI Node example
+```python
+import sys
+
+sys.path.insert(0, f'/path/to/latentflow/src')
+sys.path.insert(0, f'/path/to/ComfyUI')
+
+import latentflow as lf
+import nodes
+import torch
+
+state = lf.State({})
+
+(lf.ComfyNode(nodes.CheckpointLoaderSimple, ckpt_name='revanimated.safetensors').apply()
+    | lf.Set(state, "checkpoint")
+    | lf.ComfyNode(nodes.EmptyLatentImage, width=512, height=512, batch_size=1)
+    | lf.Error("Test")
+    | lf.ComfyNode(
+        nodes.KSampler,
+        model=state['checkpoint']['MODEL'],
+        positive=lf.ComfyNode(nodes.CLIPTextEncode, text="a cat", clip=state["checkpoint"]["CLIP"]).apply(),
+        negative=lf.ComfyNode(nodes.CLIPTextEncode, text="", clip=state["checkpoint"]["CLIP"]).apply(),
+    )
+    | lf.ComfyNode(nodes.VAEDecode, vae=state['checkpoint']["VAE"])
+    | lf.Apply(lambda x: lf.Video('HWC', torch.stack([x['IMAGE']])))
+    | lf.VideoShow()
 )
 ```
