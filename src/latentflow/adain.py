@@ -53,11 +53,20 @@ class Adain(Flow):
         if isinstance(style, str):
 
             if '.png' in self.style:
-                self.style = torch.tensor(np.array(Image.open(self.style)))
+                self.style = Video('HWC', torch.tensor(np.array(Image.open(self.style))))
             elif '.mp4' in latents_adain_path:
                 self.style = VideoLoad(self.style).apply()
 
+    def onload(self):
+        self.style.onload()
+
+    def offload(self):
+        self.style.offload()
+
     def apply(self, video: Video) -> Video:
+
+        self.onload()
+        video.onload()
 
         vid = video.hwc()
         video_length = vid.shape[1]
@@ -77,5 +86,8 @@ class Adain(Flow):
         vid = adaptive_instance_normalization(vid, ref)
         vid = torch.clamp(vid * 255, 0, 255).to(torch.uint8)
         vid = rearrange(vid, 'b c f h w -> b f h w c')
+
+        video.offload()
+        self.offload()
 
         return Video('HWC', vid)

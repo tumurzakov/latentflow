@@ -14,11 +14,15 @@ class Unet(Flow):
             unet,
             scheduler,
             fp16 = False,
+            onload_device: str='cuda',
+            offload_device: str='cpu',
             ):
 
         self.unet = unet
         self.scheduler = scheduler
         self.fp16 = fp16
+        self.onload_device = onload_device
+        self.offload_device = offload_device
 
         logging.debug("Unet init %s %s fp16=%s", unet.device, unet.dtype, self.fp16)
         logging.debug("Unet init %s", type(scheduler))
@@ -46,11 +50,23 @@ class Unet(Flow):
 
         return self
 
+    def onload(self):
+        self.unet = self.unet.to(self.onload_device)
+
+    def offload(self):
+        self.unet = self.unet.to(self.offload_device)
+
     @torch.no_grad()
     def apply(self, latent):
 
         if self.latent is not None:
             latent = self.latent
+
+
+        self.onload()
+        latent.onload()
+        self.embeddings.onload()
+
 
         timestep = self.timestep
         embeddings = self.embeddings
@@ -66,17 +82,20 @@ class Unet(Flow):
                 )
 
         logging.debug("Unet apply cnet %s %s",
-                len(down_block_res_samples) if down_block_res_samples is not None else None,
-                mid_block_res_sample.shape if mid_block_res_sample is not None else None,
+                [len(down_block_res_samples), down_block_res_samples[0].dtype]
+                    if down_block_res_samples is not None else None,
+
+                [mid_block_res_sample.shape, mid_block_res_sample.dtype]
+                    if mid_block_res_sample is not None else None,
                 )
 
         latents = latent.latent
         latent_model_input = latents
         latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep)
 
-        embeddings = embeddings.embeddings.to(self.unet.device, dtype=self.unet.dtype)
+        embeddings = embeddings.embeddings.to(dtype=self.unet.dtype)
 
-        with torch.autocast('cuda', enabled=self.fp16, dtype=torch.float16):
+        with torch.autocast(self.onload_device, enabled=self.fp16, dtype=torch.float16):
             noise_pred = self.unet(
                     latent_model_input,
                     timestep,
@@ -85,7 +104,15 @@ class Unet(Flow):
                     mid_block_additional_residual=mid_block_res_sample,
                     ).sample.to(device=latents.device, dtype=latents.dtype)
 
-        return NoisePredict(latent=noise_pred)
+        result = NoisePredict(latent=noise_pred)
+
+        result.offload()
+        self.embeddings.offload()
+        latent.offload()
+        self.offload()
+
+
+        return result
 
 class CFGPrepare(Flow):
     def __init__(self,

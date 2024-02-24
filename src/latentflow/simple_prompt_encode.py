@@ -6,16 +6,31 @@ from .prompt import Prompt
 from .prompt_embeddings import PromptEmbeddings
 
 class SimplePromptEncode(Flow):
-    def __init__(self, tokenizer, text_encoder, do_classifier_free_guidance=True):
+    def __init__(self,
+            tokenizer,
+            text_encoder,
+            onload_device: str='cuda',
+            offload_device: str='cpu',
+            do_classifier_free_guidance=True):
         self.tokenizer = tokenizer
         self.text_encoder = text_encoder
         self.do_classifier_free_guidance = do_classifier_free_guidance
-
+        self.onload_device = onload_device
+        self.offload_device = offload_device
         logging.debug("SimplePromptEncode init")
+
+    def onload(self):
+        self.text_encoder = self.text_encoder.to(self.onload_device)
+
+    def offload(self):
+        self.text_encoder = self.text_encoder.to(self.offload_device)
 
     @torch.no_grad()
     def apply(self, prompt: Prompt):
         logging.debug(f"CompelPromptEncode apply {prompt}")
+
+        self.onload()
+        prompt.onload()
 
         if prompt.prompts is not None:
 
@@ -40,6 +55,10 @@ class SimplePromptEncode(Flow):
                     )
 
         prompt.embeddings = PromptEmbeddings(embeddings=embeddings)
+
+        prompt.offload()
+        self.offload()
+
         return prompt
 
     def encode(self, prompt, negative_prompt, num_videos_per_prompt=1):

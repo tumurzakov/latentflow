@@ -16,6 +16,8 @@ class PromptEncode(Flow):
     def apply(self, prompt: Prompt):
         logging.debug(f"CompelPromptEncode apply {prompt}")
 
+        prompt.onload()
+
         if prompt.prompts is not None:
 
             embeddings = []
@@ -39,5 +41,8 @@ class PromptEncode(Flow):
                     )
 
         prompt.embeddings = PromptEmbeddings(embeddings=embeddings)
+
+        prompt.offload()
+
         return prompt
 

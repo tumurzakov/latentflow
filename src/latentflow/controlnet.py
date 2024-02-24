@@ -12,21 +12,66 @@ from .flow import Flow
 from .latent import Latent
 
 class ControlNetLatent(Latent):
-    def __init__(self, latent, down_block_res_samples, mid_block_res_sample):
-        super().__init__(latent.latent)
+    def __init__(self,
+            latent,
+            down_block_res_samples,
+            mid_block_res_sample,
+            onload_device='cuda',
+            offload_device='cpu',
+            ):
+        super().__init__(
+                latent=latent.latent,
+                onload_device=onload_device,
+                offload_device=offload_device,
+                )
 
         self.down_block_res_samples = down_block_res_samples
         self.mid_block_res_sample = mid_block_res_sample
 
+    def onload(self):
+        super().onload()
+
+        if self.down_block_res_samples is not None:
+            for i, _ in enumerate(self.down_block_res_samples):
+                self.down_block_res_samples[i] = self.down_block_res_samples[i].to(self.onload_device)
+
+        if self.mid_block_res_sample is not None:
+            self.mid_block_res_sample = self.mid_block_res_sample.to(self.onload_device)
+
+    def offload(self):
+        super().offload()
+
+        if self.down_block_res_samples is not None:
+            for i, _ in enumerate(self.down_block_res_samples):
+                self.down_block_res_samples[i] = self.down_block_res_samples[i].to(self.offload_device)
+
+        if self.mid_block_res_sample is not None:
+            self.mid_block_res_sample = self.mid_block_res_sample.to(self.offload_device)
+
+
 class ControlNet(Flow):
     def __init__(self,
             controlnet = None,
+            controlnet_path = None,
             scheduler = None,
             control_guidance_start: Union[float, List[float]] = 0.0,
             control_guidance_end: Union[float, List[float]] = 1.0,
             guess_mode: bool = False,
             do_classifier_free_guidance: bool = True,
+            dtype=torch.float32,
+            onload_device='cuda',
+            offload_device='cpu',
             ):
+
+        self.onload_device = onload_device
+        self.offload_device = offload_device
+        self.dtype = dtype
+
+        if controlnet_path is not None:
+            controlnet = MultiControlNetModel(ControlNetModel.from_pretrained(controlnet_path, torch_dtype=dtype))
+
+        if isinstance(controlnet, ControlNetModel):
+            controlnet = MultiControlNetModel([controlnet])
 
         assert isinstance(controlnet, MultiControlNetModel)
 
@@ -58,6 +103,12 @@ class ControlNet(Flow):
             else controlnet.nets[0].config.global_pool_conditions
         )
         self.guess_mode = self.guess_mode or global_pool_conditions
+
+    def onload(self):
+        self.controlnet = self.controlnet.to(self.onload_device)
+
+    def offload(self):
+        self.controlnet = self.controlnet.to(self.offload_device)
 
     def set(self, controlnet_video):
         self.controlnet_images = controlnet_video.chw().float()/255.0
@@ -93,13 +144,16 @@ class ControlNet(Flow):
         if self.latent is not None:
             latent = self.latent
 
+        self.onload()
+        latent.onload()
+        self.timesteps.onload()
+        self.embeddings.onload()
+
         timestep_index = self.timestep_index
         timestep = self.timestep
         timesteps = self.timesteps
 
-        embeddings = self.embeddings.embeddings.to(
-                device=self.controlnet.device,
-                dtype=self.controlnet.dtype)
+        embeddings = self.embeddings.embeddings.to(self.controlnet.dtype)
 
         latent_model_input = latent.latent.to(self.controlnet.device, self.controlnet.dtype)
         latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep)
@@ -154,7 +208,15 @@ class ControlNet(Flow):
             ]
             mid_block_res_sample += latent.mid_block_res_sample
 
-        return ControlNetLatent(latent, down_block_res_samples, mid_block_res_sample)
+        result = ControlNetLatent(latent, down_block_res_samples, mid_block_res_sample)
+
+        result.offload()
+        self.embeddings.offload()
+        self.timesteps.offload()
+        latent.offload()
+        self.offload()
+
+        return result
 
     @torch.no_grad()
     def calc_cnet_residuals(

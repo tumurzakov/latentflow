@@ -2,7 +2,7 @@ include env
 export
 
 unit:
-	cd src/tests_unit; PYTHONPATH=.. python -m unittest *_test.py
+	cd tests/unit; PYTHONPATH=../../src python -m unittest *_test.py
 
 func:
-	cd src/tests_func; PYTHONPATH="..:../../../AnimateDiff" python -m unittest test_*.py
+	cd tests/func; PYTHONPATH="../../src:$(ANIMATEDIFF_PATH):$(COMFYUI_PATH)" python -m unittest test_*.py

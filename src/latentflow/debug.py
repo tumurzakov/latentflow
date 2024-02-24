@@ -22,7 +22,13 @@ class Log(Flow):
         if self.callback is not None:
             debug = self.callback(debug)
 
-        logging.log(self.level, 'Debug %s %s', self.comment, debug)
+        logging.log(self.level,
+                'Debug %s %s %.2fGB',
+                self.comment,
+                debug,
+                torch.cuda.memory_allocated(0)/1024/1024/1024,
+                )
+
         return other
 
 class Debug(Log):
@@ -70,3 +76,14 @@ class DebugHash(Flow):
 
         return other
 
+
+class DebugCUDAUsage(Flow):
+    def __init__(self, comment=""):
+        self.comment = comment
+
+    def apply(self, other):
+        allocated = torch.cuda.memory_allocated(0)
+        reserved = torch.cuda.memory_reserved(0)
+
+        logging.debug(f'CUDA Usage {self.comment}: allocated={allocated} reserved={reserved}')
+        return other

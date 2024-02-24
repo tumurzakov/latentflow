@@ -20,15 +20,31 @@ class A1111PromptEncode(Flow):
 
     """
 
-    def __init__(self, tokenizer: CLIPTokenizer, text_encoder: CLIPTextModel):
+    def __init__(self,
+            tokenizer: CLIPTokenizer,
+            text_encoder: CLIPTextModel,
+            onload_device: str='cuda',
+            offload_device: str='cpu',
+            ):
         self.tokenizer = tokenizer
         self.text_encoder = text_encoder
+        self.onload_device = onload_device
+        self.offload_device = offload_device
 
         logging.debug("A1111PromptEncode init")
+
+    def onload(self):
+        self.text_encoder = self.text_encoder.to(self.onload_device)
+
+    def offload(self):
+        self.text_encoder = self.text_encoder.to(self.offload_device)
 
     @torch.no_grad()
     def apply(self, prompt: Prompt) -> Prompt:
         logging.debug(f"CompelPromptEncode apply {prompt}")
+
+        self.onload()
+        prompt.onload()
 
         if prompt.prompts is not None:
 
@@ -53,6 +69,10 @@ class A1111PromptEncode(Flow):
                     )
 
         prompt.embeddings = PromptEmbeddings(embeddings=embeddings)
+
+        prompt.offload()
+        self.offload()
+
         return prompt
 
 

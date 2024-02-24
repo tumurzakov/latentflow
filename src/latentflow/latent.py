@@ -9,20 +9,20 @@ class Latent(Flow):
     def __init__(self,
             latent: torch.Tensor=None,
             shape: tuple = None,
-            device: Optional[Union[str, torch.device]] = None,
+            onload_device: str='cuda',
+            offload_device: str='cpu',
             full = None,
             ):
 
         self.latent = None
 
         if latent is not None:
-            assert len(latent.shape) == 5
             self.latent = latent
             shape = latent.shape
-            device = latent.device
 
         self.shape = shape
-        self.device = device
+        self.onload_device = onload_device
+        self.offload_device = offload_device
 
         if self.latent is None:
             if full is not None:
@@ -30,24 +30,29 @@ class Latent(Flow):
             elif self.shape is not None:
                 self.latent = torch.randn(self.shape)
 
-        if device is not None:
-            self.latent = self.latent.to(device)
-
         logging.debug("Latent init %s %s", type(self), self)
+
+    def onload(self):
+        self.latent = self.latent.to(self.onload_device)
+
+    def offload(self):
+        self.latent = self.latent.to(self.offload_device)
 
     def save(self, path):
         torch.save(self.latent, path)
         return self
 
-    def load(self, path, device='cpu'):
-        return Latent(torch.load(path).to(device))
+    def load(self, path):
+        return Latent(torch.load(path))
 
     def clone(self):
         return type(self)(self.latent.clone())
 
     def apply(self, value):
         logging.debug("Latent apply %s %s", self, value)
+        self.onload()
         self.set(value)
+        self.offload()
         return self
 
     def resize(self, size):
@@ -105,6 +110,9 @@ class LatentAdd(Flow):
         logging.debug("LatentAdd.apply %s[%s] %s %s", \
                 self.latent, self.key, other, self.mask)
 
+        other.onload()
+        self.latent.onload()
+
         s = self.latent.latent
         l = other.latent
 
@@ -115,5 +123,8 @@ class LatentAdd(Flow):
             s[self.key] += l
         else:
             s += l
+
+        other.offload()
+        self.latent.offload()
 
         return self.latent

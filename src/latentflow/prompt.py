@@ -36,6 +36,21 @@ class Prompt(Flow):
         if self.frames is not None:
             logging.debug(f"init {self}")
 
+    def onload(self):
+        if self.image is not None:
+            self.image.onload()
+
+        if self.embeddings is not None:
+            self.embeddings.onload()
+
+    def offload(self):
+        if self.image is not None:
+            self.image.offload()
+
+        if self.embeddings is not None:
+            self.embeddings.offload()
+
+
     def set(self, prompt):
         frames = [None for x in range(max(max(self.frames), max(prompt.frames))+1)]
 
@@ -52,6 +67,7 @@ class Prompt(Flow):
         return self
 
     def apply(self, other):
+
         if not isinstance(other, Prompt):
             return other
 

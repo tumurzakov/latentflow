@@ -13,10 +13,15 @@ from animatediff.utils.convert_from_ckpt import convert_ldm_unet_checkpoint, con
 from diffusers.utils.import_utils import is_xformers_available
 from omegaconf import OmegaConf
 
+from diffusers.models.attention_processor import AttnProcessor2_0
+
 from .flow import Flow
 from .latent import Latent
 
 class AnimateDiffPipeline(AnimationPipeline, Flow):
+    onload_device = 'cuda'
+    offload_device = 'cpu'
+
     @classmethod
     def load(cls,
             pretrained_model_path,
@@ -29,7 +34,9 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
             controlnet_paths=[],
             motion_module_config_path=None,
             extra_tokens=None,
-            device='cuda',
+            onload_device: str='cuda',
+            offload_device: str='cpu',
+            loras={},
             *args,
             **kwargs,
             ):
@@ -58,7 +65,9 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
             scheduler_class=scheduler_class,
             extra_tokens=extra_tokens,
             controlnet=controlnet,
-            device=device,
+            loras=loras,
+            onload_device=onload_device,
+            offload_device=offload_device,
             *args,
             **kwargs,
         )
@@ -67,8 +76,21 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         self.call_kwargs = kwargs
         return self
 
+    def onload(self):
+        self.unet = self.unet.to(self.onload_device)
+        self.text_encoder = self.text_encoder.to(self.onload_device)
+        self.vae = self.vae.to(self.onload_device)
+
+    def offload(self):
+        self.unet = self.unet.to(self.offload_device)
+        self.text_encoder = self.text_encoder.to(self.offload_device)
+        self.vae = self.vae.to(self.offload_device)
+
     def apply(self, latent: Latent) -> Latent:
         kwargs = self.call_kwargs
+
+        self.onload()
+        latent.onload()
 
         logging.debug("AnimateDiffPipeline %s %s",
                 latent, type(self))
@@ -90,6 +112,10 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
 
         logging.debug("Pipeline result %s", result.shape)
 
+        result.offload()
+        latent.offload()
+        self.offload()
+
         return Latent(result)
 
     @classmethod
@@ -105,7 +131,9 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         scheduler_config_extra = None,
         extra_tokens = None,
         controlnet = [],
-        device = 'cuda',
+        loras = {},
+        onload_device: str='cuda',
+        offload_device: str='cpu',
         *args,
         **kwargs,
     ):
@@ -137,27 +165,30 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
           logging.info("Extra tokens added: %s %d", extra_tokens, added)
 
         logging.debug("AnimateDiffPipelineLoad text_encoder %s", text_encoder_path)
-        text_encoder = CLIPTextModel.from_pretrained(text_encoder_path, subfolder="text_encoder").to('cuda')
+        text_encoder = CLIPTextModel.from_pretrained(text_encoder_path, subfolder="text_encoder")
 
         if vae_is_svd:
             logging.debug("AnimateDiffPipelineLoad vae %s", vae_path)
-            vae = AutoencoderKLTemporalDecoder.from_pretrained(vae_path, subfolder="vae").to('cuda')
+            vae = AutoencoderKLTemporalDecoder.from_pretrained(vae_path, subfolder="vae")
         else:
             try:
                 logging.debug("AnimateDiffPipelineLoad vae %s", vae_path)
-                vae = AutoencoderKL.from_pretrained(vae_path, subfolder="vae").to('cuda')
+                vae = AutoencoderKL.from_pretrained(vae_path, subfolder="vae")
             except:
                 logging.debug("AnimateDiffPipelineLoad vae %s", vae_path)
-                vae = AutoencoderKL.from_pretrained(vae_path).to('cuda')
+                vae = AutoencoderKL.from_pretrained(vae_path)
 
         logging.debug("AnimateDiffPipelineLoad unet %s", unet_path)
+
         unet = UNet3DConditionModel.from_pretrained_2d(
                 unet_path,
                 subfolder="unet",
                 unet_additional_kwargs=OmegaConf.to_container(motion_module_config.unet_additional_kwargs))
 
-        if is_xformers_available() and ('xformers' not in kwargs or kwargs['xformers']):
-            unet.enable_xformers_memory_efficient_attention()
+        unet.set_attn_processor(AttnProcessor2_0())
+
+        #if is_xformers_available() and ('xformers' not in kwargs or kwargs['xformers']):
+        #    unet.enable_xformers_memory_efficient_attention()
 
         if scheduler_class_name is None:
             scheduler_class_name = 'DDIMScheduler'
@@ -190,6 +221,15 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
                 controlnet=controlnet if controlnet is not None and len(controlnet) > 0 else None,
                 )
 
+        pipeline.onload_device = onload_device
+        pipeline.offload_device = offload_device
+
+        for lora in loras:
+            lora_scale = loras[lora]
+            pipeline.load_lora_weights(lora)
+            pipeline.fuse_lora(lora_scale=lora_scale)
+
+
         logging.debug("AnimateDiffPipelineLoad motion_module %s", motion_module_path)
         motion_module_state_dict = torch.load(motion_module_path, map_location="cpu")
         if "global_step" in motion_module_state_dict:
@@ -200,4 +240,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         if 'fp16' in kwargs and kwargs['fp16']:
             pipeline.unet = pipeline.unet.half()
 
-        return pipeline.to(device)
+        if 'compile_unet' in kwargs and kwargs['compile_unet']:
+            unet = torch.compile(unet, mode="reduce-overhead", fullgraph=True)
+
+        return pipeline

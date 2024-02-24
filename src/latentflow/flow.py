@@ -17,7 +17,7 @@ class Flow:
         return self
 
     def __gt__(self, other):
-        assert hasattr(other, 'set'), f'{type(other)} should have set mehtod'
+        assert hasattr(other, 'set'), f'{type(other)} should have set method'
         logging.debug('Flow set %s.set(%s) -> %s', type(other), type(self), type(self))
         other.set(self)
         return self

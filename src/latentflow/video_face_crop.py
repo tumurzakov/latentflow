@@ -12,18 +12,39 @@ from IPython.display import display
 from PIL import Image
 from facenet_pytorch import MTCNN, InceptionResnetV1
 from einops import rearrange
+import gc
 
 class VideoFaceCrop(Flow):
-    def __init__(self, cache=None, padding_percent=0.05, resolution=512, zoom=False, size=None):
+    def __init__(self,
+            cache=None,
+            padding_percent=0.05,
+            resolution=512,
+            zoom=False,
+            size=None,
+            onload_device: str='cuda',
+            offload_device: str='cpu',
+            ):
         self.cache = cache
+        self.resolution = resolution
         self.padding_percent = padding_percent
         self.zoom = zoom
         self.size = size
+        self.onload_device = onload_device
+        self.offload_device = offload_device
 
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.mtcnn = MTCNN(image_size=resolution, device=device)
+    def onload(self):
+        self.mtcnn = MTCNN(image_size=self.resolution, device=self.onload_device)
+
+    def offload(self):
+        del self.mtcnn
+        gc.collect()
+        torch.cuda.empty_cache()
+        self.mtcnn = None
 
     def apply(self, video):
+        self.onload()
+        video.onload()
+
         if self.cache is not None and os.path.isfile(self.cache):
             v = torch.load(self.cache).to(video.video.device)
         else:
@@ -31,7 +52,12 @@ class VideoFaceCrop(Flow):
             if self.cache is not None:
                 torch.save(v, self.cache)
 
-        return Video('HWC', v)
+        result = Video('HWC', v)
+
+        result.offload()
+        video.offload()
+        self.offload()
+        return result
 
     @torch.no_grad()
     def process(self, video):
@@ -40,8 +66,9 @@ class VideoFaceCrop(Flow):
         for b in v:
             frames = []
             for f in tqdm(b, desc=f'facecrop'):
+
                 boxes, probs, points = self.mtcnn.detect(
-                        f.detach().cpu().numpy(),
+                        f,
                         landmarks=True)
 
                 back = torch.zeros_like(f)
@@ -140,6 +167,7 @@ class VideoFaceCrop(Flow):
 
         batches = torch.stack(batches)
         batches = batches.to(v.device)
+
         return batches
 
     def interpolate(self, tensor, scale_factor):

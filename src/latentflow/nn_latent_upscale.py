@@ -251,28 +251,42 @@ class LatentResizer(nn.Module):
 
 
 class NNLatentUpscale(Flow):
-    def __init__(self, weight_path):
+    def __init__(self,
+            weight_path,
+            onload_device='cuda',
+            offload_device='cpu',
+            ):
         self.scale_factor = 0.13025
         self.weight_path = weight_path
         self.model = None
         self.scale = None
+        self.onload_device = onload_device
+        self.offload_device = offload_device
 
     def __call__(self, scale):
         self.scale = scale
         return self
 
+    def onload(self):
+        self.model = LatentResizer.load_model(
+                self.weight_path,
+                self.onload_device,
+                )
+
+    def offload(self):
+        del self.model
+        gc.collect()
+        torch.cuda.empty_cache
+        self.model = None
+
     @torch.no_grad()
     def apply(self, latent):
         latents = latent.latent
 
-        if self.model is None:
-            self.model = self.model = LatentResizer.load_model(
-                    self.weight_path,
-                    latents.device,
-                    latents.dtype,
-                    )
+        latent.onload()
+        self.onload()
 
-        self.model.to(device=latents.device)
+        self.model = self.model.to(latent.dtype)
 
         frames = []
         for f in range(latents.shape[2]):
@@ -283,5 +297,10 @@ class NNLatentUpscale(Flow):
 
         frames = torch.stack(frames)
         batches = rearrange(frames, 'f b c h w -> b c f h w')
+        result = Latent(batches)
 
-        return Latent(batches)
+        latent.offload()
+        result.offload()
+        self.offload()
+
+        return result

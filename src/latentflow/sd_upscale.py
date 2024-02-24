@@ -12,27 +12,47 @@ from .video import Video
 
 class SDUpscale(Flow):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self,
+            onload_device: str='cuda',
+            offload_device: str='cpu',
+            *args,
+            **kwargs):
         self.pipeline = None
         self.kwargs = kwargs
+        self.onload_device = onload_device
+        self.offload_device = offload_device
 
         if 'prompt' not in self.kwargs:
             self.kwargs['prompt'] = "high quality, detailed"
 
+    def onload(self):
+        self.pipeline = self.pipeline.to(self.onload_device)
+
+    def offload(self):
+        self.pipeline = self.pipeline.to(self.offload_device)
+
     def apply(self, video: Video):
+
+        self.onload()
+        video.onload()
+
         upscaled = []
         for v in video.hwc():
             upscaled.append(self.upscale(v, **self.kwargs))
 
         upscaled = torch.stack(upscaled)
 
-        return Video('HWC', upscaled)
+        result = Video('HWC', upscaled)
+
+        result.offload()
+        self.offload()
+
+        return result
 
     def load_pipeline(self):
         if self.pipeline is None:
             model_id = "stabilityai/stable-diffusion-x4-upscaler"
             self.pipeline = StableDiffusionUpscalePipeline.from_pretrained(model_id, torch_dtype=torch.float16)
-            self.pipeline = self.pipeline.to("cuda")
             self.pipeline.vae.enable_tiling = True
             self.pipeline.set_progress_bar_config(disable=True)
 

@@ -1,5 +1,6 @@
 import torch
 import logging
+import gc
 from einops import rearrange
 from PIL import Image
 from tqdm import tqdm
@@ -12,6 +13,7 @@ from diffusers.pipelines.controlnet import MultiControlNetModel
 
 import comfy
 from comfy.model_patcher import ModelPatcher
+from comfy.model_management import cleanup_models
 from .comfy_ip_adapter_plus import (
     IPAdapterModelLoader,
     IPAdapterApply,
@@ -39,51 +41,82 @@ class ComfyIPAdapterPromptEncode(Flow):
             noise=0.0,
             pipe=None,
             weight=1.0,
+            onload_device='cuda',
+            offload_device='cpu',
             ):
 
         self.ip_adapter_path = ip_adapter_path
-        self.image_encoder_path = clip_vision_path
+        self.ip_adapter = ip_adapter
+        self.clip_vision_path = clip_vision_path
+        self.clip_vision = clip_vision
+        self.insightface = insightface
         self.noise = noise
         self.pipe = pipe
         self.weight = weight
+        self.onload_device = onload_device
+        self.offload_device = offload_device
 
         self.model = None
-        if pipe is not None:
+
+    def onload(self):
+        if self.ip_adapter is None and self.ip_adapter_path is not None:
+            self.ip_adapter = IPAdapterModelLoader().load_ipadapter_model(self.ip_adapter_path)[0]
+
+        if self.clip_vision is None and self.clip_vision_path is not None:
+            self.clip_vision = comfy.clip_vision.load(self.clip_vision_path)
+
+        if self.pipe is not None:
             self.device = self.pipe.unet.device
             self.dtype = self.pipe.unet.dtype
-            self.model = ModelPatcher(pipe.unet, load_device='cuda', offload_device='cpu')
+            self.model = ModelPatcher(self.pipe.unet,
+                    load_device=self.onload_device,
+                    offload_device=self.offload_device)
 
-        self.tensor_cache = {}
-
-        self.ip_adapter = ip_adapter
-        if self.ip_adapter is None and ip_adapter_path is not None:
-            self.ip_adapter = IPAdapterModelLoader().load_ipadapter_model(ip_adapter_path)[0]
-
-        self.clip_vision = clip_vision
-        if self.clip_vision is None and clip_vision_path is not None:
-            self.clip_vision = comfy.clip_vision.load(clip_vision_path)
-
-        is_portrait = "proj.2.weight" in self.ip_adapter["image_proj"] and \
+        self.is_portrait = "proj.2.weight" in self.ip_adapter["image_proj"] and \
                 not "proj.3.weight" in self.ip_adapter["image_proj"] and \
                 not "0.to_q_lora.down.weight" in self.ip_adapter["ip_adapter"]
 
-        is_faceid = is_portrait or "0.to_q_lora.down.weight" in self.ip_adapter["ip_adapter"]
+        self.is_faceid = self.is_portrait or "0.to_q_lora.down.weight" in self.ip_adapter["ip_adapter"]
 
-        self.insightface = insightface
-        if self.insightface is None and is_faceid and clip_vision_path is not None:
-            self.insightface = InsightFaceLoader().load_insight_face('CUDA')[0]
+        if self.insightface is None and self.is_faceid and self.clip_vision is not None:
+            self.insightface = InsightFaceLoader().load_insight_face(self.onload_device.upper())[0]
 
-        self.ip_adapter_apply = IPAdapterApply()
-        self.ip_adapter_apply.init(
-                self.ip_adapter,
-                model=self.model,
-                weight=self.weight,
-                clip_vision=self.clip_vision,
-                insightface=self.insightface,
-                )
+        if self.clip_vision is not None:
+            self.ip_adapter_apply = IPAdapterApply()
+            self.ip_adapter_apply.init(
+                    self.ip_adapter,
+                    model=self.model,
+                    weight=self.weight,
+                    clip_vision=self.clip_vision,
+                    insightface=self.insightface,
+                    )
 
-        if pipe is not None:
+
+        self.tensor_cache = {}
+
+        if self.pipe is not None:
             self.set_ip_adapter()
+
+    def offload(self):
+        del self.insightface
+        del self.ip_adapter_apply
+        del self.model
+        del self.ip_adapter
+        del self.clip_vision
+        del self.tensor_cache
+
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        self.ip_adapter_apply = None
+        self.insightface = None
+        self.model = None
+        self.ip_adapter = None
+        self.clip_vision = None
+        self.tensor_cache = {}
+
+        cleanup_models()
+
 
     def set_ip_adapter(self):
         unet = self.pipe.unet
@@ -133,6 +166,10 @@ class ComfyIPAdapterPromptEncode(Flow):
     def apply(self, prompt):
         logging.debug("ComfyIPAdapterPromptEncode apply %s", prompt)
 
+        self.onload()
+        prompt.onload()
+        self.video.onload()
+
 
         if prompt.prompts is not None:
             self.tensor_cache = {}
@@ -164,6 +201,11 @@ class ComfyIPAdapterPromptEncode(Flow):
             embeddings = self.encode(prompt.embeddings.embeddings, image)
 
         prompt.embeddings = PromptEmbeddings(embeddings)
+
+        self.video.offload()
+        prompt.offload()
+        self.offload()
+
         return prompt
 
     def set_scale(self, scale):

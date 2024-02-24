@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import math
 import PIL
+import gc
 
 from insightface.app import FaceAnalysis
 
@@ -40,9 +41,22 @@ def draw_kps(image_pil, kps, color_list=[(255,0,0), (0,255,0), (0,0,255), (255,2
     return out_img_pil
 
 class InsightFaceAnalysis(Flow):
-    def __init__(self, face_embeddings, face_controlnet_image):
+    def __init__(self,
+            face_embeddings,
+            face_controlnet_image,
+            onload_device='cuda',
+            offload_device='cpu',
+            ):
         self.face_embeddings = face_embeddings
         self.face_controlnet_image = face_controlnet_image
+        self.onload_device = onload_device
+        self.offload_device = offload_device
+
+    def onload(self):
+        self.face_embeddings = self.face_embeddings.to(self.onload_device)
+
+    def offload(self):
+        self.face_embeddings = self.face_embeddings.to(self.offload_device)
 
 class DoInsightFaceAnalysis(Flow):
     """
@@ -51,6 +65,10 @@ class DoInsightFaceAnalysis(Flow):
 
     def __init__(self, model_path: str = "./", cache=None):
 
+        self.model_path = model_path
+        self.cache = cache
+
+    def onload(self):
         self.app = FaceAnalysis(
                 name='antelopev2',
                 root=model_path,
@@ -58,11 +76,18 @@ class DoInsightFaceAnalysis(Flow):
 
         self.app.prepare(ctx_id=0, det_size=(640, 640))
 
-        self.cache = cache
+    def offload(self):
+        del self.app
+        gc.collect()
+        torch.cuda.empty_cache()
+        self.app = None
+
 
     def apply(self, video):
 
         logging.debug("DoInsightFaceAnalisys apply %s", video)
+
+        self.onload()
 
         if self.cache is not None:
             if os.path.isfile(self.cache):
@@ -73,10 +98,15 @@ class DoInsightFaceAnalysis(Flow):
         else:
             self.face_embeddings, self.face_controlnet_image = self.analyze(video)
 
-        return InsightFaceAnalysis(
+        result = InsightFaceAnalysis(
                 face_embeddings=self.face_embeddings,
                 face_controlnet_image=self.face_controlnet_image,
                 )
+
+        result.offload()
+        self.offload()
+
+        return result
 
     def analyze(self, video):
         face_embeddings = []

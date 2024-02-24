@@ -18,10 +18,15 @@ class RESRGANUpscale(Flow):
 
     def apply(self, other: Video) -> Video:
 
+        other.onload()
+
         video = upscale(other.hwc(), self.model_path, scale=self.scale)
+        video = Video('HWC', video)
 
-        return Video('HWC', video)
+        video.offload()
+        other.offload()
 
+        return video
 
 def realesrgan(model_path, scale=4):
     if 'RealESRGAN_x4plus_anime_6B.pth' in model_path:

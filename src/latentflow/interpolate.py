@@ -22,6 +22,8 @@ class Interpolate(Flow):
         self.antialias = antialias
 
     def apply(self, tensor: Tensor) -> Tensor:
+        tensor.onload()
+
         t = tensor.tensor
         t = F.interpolate(
                 t,
@@ -32,5 +34,11 @@ class Interpolate(Flow):
                 recompute_scale_factor=self.recompute_scale_factor,
                 antialias=self.antialias,
                 )
-        return Tensor(t)
+
+        result = Tensor(t)
+
+        tensor.offload()
+        result.offload()
+
+        return result
 

@@ -7,12 +7,23 @@ class Timesteps(Flow):
     def __init__(self,
             timesteps: torch.Tensor = None,
             num_inference_steps: int = 0,
+            onload_device: str='cuda',
+            offload_device: str='cpu',
             ):
+
         self.timesteps = timesteps
         self.num_inference_steps = num_inference_steps
+        self.onload_device = onload_device
+        self.offload_device = offload_device
 
         logging.debug(f'{self}')
         self._index = 0
+
+    def onload(self):
+        self.timesteps = self.timesteps.to(self.onload_device)
+
+    def offload(self):
+        self.timesteps = self.timesteps.to(self.offload_device)
 
     def set(self, timesteps):
         self.timesteps = timesteps.timesteps

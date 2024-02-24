@@ -23,9 +23,13 @@ class Step(Flow):
                 timestep, noise_predict, latent)
 
     def apply(self, noise_predict: NoisePredict):
+
+        noise_predict.onload()
+        self.latent.onload()
+
         latent_model_input = self.latent.latent
 
-        if noise_predict is None and isinstance(noise_predict, NoisePredict):
+        if noise_predict is None and isinstance(self.noise_predict, NoisePredict):
             noise_predict = self.noise_predict
 
         # compute the previous noisy sample x_t -> x_t-1
@@ -37,6 +41,9 @@ class Step(Flow):
 
         logging.debug("Step apply %s %s %s",
                 self.timestep, noise_predict, self.latent)
+
+        self.latent.offload()
+        noise_predict.offload()
 
         return self.latent
 

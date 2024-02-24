@@ -10,5 +10,11 @@ class LatentInterpolate(Interpolate):
         super().__init__(scale_factor = scale_factor, mode = mode)
 
     def apply(self, latent):
+        latent.onload()
         l = super().apply(Tensor(latent.latent))
-        return Latent(l.tensor)
+        result = Latent(l.tensor)
+
+        latent.offload()
+        result.offload()
+
+        return result

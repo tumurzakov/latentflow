@@ -5,9 +5,21 @@ from .flow import Flow
 
 class PromptEmbeddings(Flow):
 
-    def __init__(self, embeddings=None):
+    def __init__(self,
+            embeddings=None,
+            onload_device='cuda',
+            offload_device='cpu',
+            ):
         # torch.Size([2, 77, 768])
         self.embeddings = embeddings
+        self.onload_device = onload_device
+        self.offload_device = offload_device
+
+    def onload(self):
+        self.embeddings = self.embeddings.to(self.onload_device)
+
+    def offload(self):
+        self.embeddings = self.embeddings.to(self.offload_device)
 
     def slice(self, l):
         logging.debug(f"PromptEmbeddings slice {l}")

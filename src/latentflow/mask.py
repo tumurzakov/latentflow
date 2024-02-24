@@ -9,9 +9,21 @@ from .video import Video
 from .latent import Latent
 
 class Mask(Flow):
-    def __init__(self, mask: torch.Tensor):
+    def __init__(self,
+            mask: torch.Tensor,
+            onload_device: str='cuda',
+            offload_device: str='cpu',
+            ):
         self.mask = mask
+        self.onload_device = onload_device
+        self.offload_device = offload_device
         logging.debug(f'{self}')
+
+    def onload(self):
+        self.mask = self.mask.to(self.onload_device)
+
+    def offload(self):
+        self.mask = self.mask.to(self.offload_device)
 
     def __str__(self):
         return f'Mask({self.mask.shape})'
@@ -25,6 +37,9 @@ class Mask(Flow):
     def invert(self):
         return Mask(1-self.mask)
 
+    def video(self):
+        return Video('HWC', self.mask)
+
     def resize(self, size):
         v = self.mask
         v = F.interpolate(
@@ -37,7 +52,14 @@ class Mask(Flow):
 
 
 class MaskEncode(Flow):
-    def __init__(self, width = None, height = None, threshold = 200, channels=1, mode='b c f h w'):
+    def __init__(self,
+            width = None,
+            height = None,
+            threshold = 200,
+            channels=1,
+            mode='b c f h w',
+            ):
+
         self.width = width
         self.height = height
         self.threshold = threshold
@@ -47,6 +69,8 @@ class MaskEncode(Flow):
 
     def apply(self, video: Video) -> Mask:
         logging.debug('MaskEncode apply %s', video)
+
+        video.onload()
 
         mask = video.chw()
 
@@ -67,6 +91,9 @@ class MaskEncode(Flow):
         mask = Mask(mask=mask)
 
         logging.debug('MaskEncode mask %s', mask)
+
+        video.offload()
+        mask.offload()
 
         return mask
 

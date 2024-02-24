@@ -1,3 +1,4 @@
+from latentflow.flow import Flow
 from latentflow.state import State
 from latentflow.state import Context
 from latentflow.seed import Seed
@@ -17,12 +18,12 @@ from latentflow.latent_show import LatentShow
 from latentflow.noise import Noise
 from latentflow.add_noise import AddNoise
 from latentflow.schedule import Schedule
-from latentflow.debug import Debug, DebugHash, Info, Error
+from latentflow.debug import Debug, DebugHash, Info, Error, DebugCUDAUsage
 from latentflow.invert import Invert
 from latentflow.bypass import Bypass
 from latentflow.lora import LoraOn, LoraOff
 from latentflow.apply import Apply
-from latentflow.controlnet import ControlNet
+from latentflow.controlnet import ControlNet,ControlNetLatent
 from latentflow.loop import Loop
 from latentflow.tile import Tile, TileGenerator, UniformFrameTileGenerator, AddTileEncoding
 from latentflow.step import Step
@@ -34,7 +35,6 @@ from latentflow.interpolate import Interpolate
 from latentflow.flow import If, Set
 from latentflow.nn_latent_upscale import NNLatentUpscale
 from latentflow.slice import slice_scale
-from latentflow.ip_adapter_prompt_encode import IPAdapterPromptEncode
 from latentflow.comfy_ip_adapter_prompt_encode import ComfyIPAdapterPromptEncode
 from latentflow.mandelbrot_noise import MandelbrotNoise
 from latentflow.save import Save, Load

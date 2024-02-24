@@ -20,15 +20,24 @@ class Video(Flow):
     def __init__(self,
             mode: str = 'HWC',
             video: torch.Tensor = None,
-            device: Optional[Union[str, torch.device]] = None,
+            onload_device: Optional[Union[str, torch.device]] = 'cuda',
+            offload_device: Optional[Union[str, torch.device]] = 'cpu',
             ):
 
         self.video = video
+        self.onload_device = onload_device
+        self.offload_device = offload_device
+
         if mode == 'CHW':
             self.video = rearrange(self.video, 'b f c h w -> b f h w c')
 
-        if device is not None:
-            self.video = self.video
+    def onload(self):
+        if self.video is not None:
+            self.video = self.video.to(self.onload_device)
+
+    def offload(self):
+        if self.video is not None:
+            self.video = self.video.to(self.offload_device)
 
     def __str__(self):
         if self.video is not None:
@@ -41,6 +50,9 @@ class Video(Flow):
 
     def __getitem__(self, key):
         return Video('HWC', self.video[key])
+
+    def set(self, value):
+        self.video[:] = value
 
     def size(self):
         return (self.video.shape[2], self.video.shape[3])

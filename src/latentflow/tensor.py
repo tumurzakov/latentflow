@@ -4,9 +4,21 @@ import logging
 from .flow import Flow
 
 class Tensor(Flow):
-    def __init__(self, tensor):
+    def __init__(self,
+            tensor,
+            onload_device: str='cuda',
+            offload_device: str='cpu',
+            ):
         self.tensor = tensor
         self.shape = tensor.shape
+        self.onload_device = onload_device
+        self.offload_device = offload_device
+
+    def onload(self):
+        self.tensor = self.tensor.to(self.onload_device)
+
+    def offload(self):
+        self.tensor = self.tensor.to(self.offload_device)
 
     def apply(self, other):
         return self

@@ -22,6 +22,8 @@ class Invert(Flow):
             tile_height: int = None,
             tile_width: int = None,
             cache: str = None,
+            onload_device: str = 'cuda',
+            offload_device: str = 'cpu',
             ):
 
         self.tokenizer = tokenizer
@@ -35,12 +37,26 @@ class Invert(Flow):
         self.tile_height = tile_height
         self.tile_width = tile_width
         self.cache = cache
+        self.onload_device = onload_device
+        self.offload_device = offload_device
 
         logging.debug("Invert init %s, %s, %s",
                 type(self.scheduler), self.steps, self.prompt)
 
+    def onload(self):
+        self.text_encoder = self.text_encoder.to(self.onload_device)
+        self.unet = self.unet.to(self.onload_device)
+
+    def offload(self):
+        self.text_encoder = self.text_encoder.to(self.offload_device)
+        self.unet = self.unet.to(self.offload_device)
+
+
     def apply(self, latent: Latent) -> Latent:
         logging.debug("Invert apply %s", latent)
+
+        self.onload()
+        latent.onload()
 
         if self.cache and os.path.isfile(self.cache):
             logging.debug("Invert load cache %s", self.cache)
@@ -56,11 +72,12 @@ class Invert(Flow):
                     do_classifier_free_guidance=False,
                     )
 
-            inv_latents = torch.zeros_like(latent.latent)
+            latents = latent.latent.to(self.unet.dtype)
+            inv_latents = torch.zeros_like(latents)
             for tile_index, tile in enumerate(tile_generator.tiles):
-                latents = latent.latent[tile]
+                tile_latents = latents[tile]
                 inv_latents[tile] = self.invert(
-                    latents,
+                    tile_latents,
                     f'{tile_index+1}/{len(tile_generator.tiles)}',
                     )[-1]
 
@@ -71,7 +88,13 @@ class Invert(Flow):
         latents = inv_latents
         latents = latents[:,:,:latent.latent.shape[2],:,:]
         latents = latents * self.scheduler.init_noise_sigma
-        return Latent(latent=latents)
+        result = Latent(latent=latents)
+
+        result.offload()
+        latent.offload()
+        self.offload()
+
+        return result
 
     @torch.no_grad()
     def invert(self, latents: torch.Tensor, desc = '') -> Latent:

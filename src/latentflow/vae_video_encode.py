@@ -18,6 +18,8 @@ class VaeVideoEncode(VideoEncode):
             cache: str = None,
             video_length: int = None,
             start_frame: int = 0,
+            onload_device='cuda',
+            offload_device='cpu',
             ):
         self.vae = vae
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
@@ -25,10 +27,14 @@ class VaeVideoEncode(VideoEncode):
         self.cache = cache
         self.video_length = video_length
         self.start_frame = start_frame
+        self.onload_device = onload_device
+        self.offload_device = offload_device
 
-        cache_dir = os.path.dirname(self.cache)
-        if not os.path.isdir(cache_dir):
-            os.mkdir(cache_dir)
+        if self.cache is not None:
+            cache_dir = os.path.dirname(self.cache)
+
+            if not os.path.isdir(cache_dir):
+                os.mkdir(cache_dir)
 
         logging.debug('VaeVideoEncode init %d, vae(%s,%s)',
                 vae_batch,
@@ -37,9 +43,18 @@ class VaeVideoEncode(VideoEncode):
         logging.debug('VaeVideoEncode video_length %s %s',
                 video_length, start_frame)
 
+    def onload(self):
+        self.vae = self.vae.to(self.onload_device)
+
+    def offload(self):
+        self.vae = self.vae.to(self.offload_device)
+
     @torch.no_grad()
     def apply(self, video: Video) -> Latent:
         logging.debug('VaeVideoEncode apply video %s', video)
+
+        video.onload()
+        self.onload()
 
         if self.cache and os.path.isfile(self.cache):
             logging.debug('VaeVideoEncode load cache latent %s', self.cache)
@@ -69,8 +84,11 @@ class VaeVideoEncode(VideoEncode):
                 logging.debug('VaeVideoEncode save cache latent %s', self.cache)
                 torch.save(latents, self.cache)
 
-        latent = Latent(latent=latents, device=self.vae.device)
+        latent = Latent(latent=latents)
         logging.debug('VaeVideoEncode apply latent %s', latent)
+
+        latent.offload()
+        self.offload()
 
         return latent
 
@@ -92,6 +110,6 @@ class VaeVideoEncode(VideoEncode):
         latents = torch.cat(latents)
 
         latents = rearrange(latents, "(b f) c h w -> b c f h w", f=video_length)
-        latents = latents * 0.18215
+        latents = latents * self.vae.config.scaling_factor
 
         return latents

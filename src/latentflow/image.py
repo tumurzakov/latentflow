@@ -7,7 +7,7 @@ import os
 from .flow import Flow
 
 class LoadImage(Flow):
-    def __init__(self, path=[], image=None, size=None, device=None):
+    def __init__(self, path=[], image=None, size=None):
         self.path = path
         self.image = image
 
@@ -18,8 +18,7 @@ class LoadImage(Flow):
                 img = PIL.Image.open(path)
                 image.append(torch.tensor(np.array(img)))
             image = torch.stack(image)
-            if device:
-                image = image.to(device)
+
             self.image = image
 
         logging.debug(f'{self}')

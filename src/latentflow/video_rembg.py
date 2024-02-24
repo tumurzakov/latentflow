@@ -1,7 +1,9 @@
 import os
+import gc
 import torch
 from rembg import remove, new_session
 import numpy as np
+from einops import rearrange
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -13,15 +15,31 @@ from .video import Video
 class VideoRembg(Flow):
     def __init__(self, model_name='u2net_human_seg', cache=None):
         self.cache = cache
-        self.session = new_session(model_name)
+        self.model_name = model_name
+        self.session = None
+
+    def onload(self):
+        self.session = new_session(self.model_name)
+
+    def offload(self):
+        del self.session
+        gc.collect()
+        self.session = None
 
     def apply(self, video):
+        self.onload()
+        video.onload()
+
         if self.cache is not None and os.path.isfile(self.cache):
             v = torch.load(self.cache).to(video.video.device)
         else:
             v = self.process(video.hwc())
             if self.cache is not None:
                 torch.save(v, self.cache)
+
+        if len(v.shape) == 4:
+            v = v.unsqueeze(0).repeat(3,1,1,1,1)
+            v = rearrange(v, 'c b f h w -> b f h w c')
 
         shape = video.video.shape
         mate = v[
@@ -34,6 +52,10 @@ class VideoRembg(Flow):
 
         output = Video('HWC', mate)
         logging.debug("VideoRembg %s %s", video, output)
+
+        output.offload()
+        self.offload()
+
         return output
 
     @torch.no_grad()
