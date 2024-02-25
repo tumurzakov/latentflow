@@ -117,7 +117,10 @@ class LatentAdd(Flow):
         l = other.latent
 
         if self.mask is not None:
-            l = l * self.mask.mask
+            if self.key is not None:
+                l = l * self.mask.mask[self.key]
+            else:
+                l = l * self.mask.mask
 
         if self.key is not None:
             s[self.key] += l

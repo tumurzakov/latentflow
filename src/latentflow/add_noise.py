@@ -23,10 +23,10 @@ class AddNoise(Flow):
         logging.debug('AddNoise init')
 
     def onload(self):
-        self.timesteps = self.timesteps.to(self.onload_device)
+        self.timesteps.onload()
 
     def offload(self):
-        self.timesteps = self.timesteps.to(self.offload_device)
+        self.timesteps.offload()
 
     def apply(self, latent) -> Latent:
         logging.debug('AddNoise apply %s', latent)
@@ -37,10 +37,10 @@ class AddNoise(Flow):
         latent_timestep = self.timesteps.timesteps[:1]
 
         noise = torch.randn_like(latent.latent)
-        latent = self.scheduler.add_noise(latent.latent, noise, latent_timestep)
+        noised_latent = self.scheduler.add_noise(latent.latent, noise, latent_timestep)
 
-        result = Latent(latent=latent)
-        logging.debug('AddNoise apply noised %s', latent)
+        result = Latent(latent=noised_latent)
+        logging.debug('AddNoise apply noised %s', result)
 
         latent.offload()
         result.offload()

@@ -14,9 +14,11 @@ from diffusers.utils.import_utils import is_xformers_available
 from omegaconf import OmegaConf
 
 from diffusers.models.attention_processor import AttnProcessor2_0
+import hashlib
 
 from .flow import Flow
 from .latent import Latent
+from .lora import LoraOn
 
 class AnimateDiffPipeline(AnimationPipeline, Flow):
     onload_device = 'cuda'
@@ -224,11 +226,8 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         pipeline.onload_device = onload_device
         pipeline.offload_device = offload_device
 
-        for lora in loras:
-            lora_scale = loras[lora]
-            pipeline.load_lora_weights(lora)
-            pipeline.fuse_lora(lora_scale=lora_scale)
-
+        if len(loras) > 0:
+            LoraOn(loras, pipeline, fuse=True).apply()
 
         logging.debug("AnimateDiffPipelineLoad motion_module %s", motion_module_path)
         motion_module_state_dict = torch.load(motion_module_path, map_location="cpu")

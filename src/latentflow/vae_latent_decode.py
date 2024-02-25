@@ -73,6 +73,6 @@ class VaeLatentDecode(LatentDecode):
         video = torch.cat(video)
         video = rearrange(video, "(b f) c h w -> b f h w c", f=video_length)
         video = (video / 2 + 0.5).clamp(0, 1)
-        video = video.float()
+        video = (video * 255).to(torch.uint8)
 
         return video

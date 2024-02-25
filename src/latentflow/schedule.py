@@ -50,7 +50,7 @@ class Schedule(Flow):
             self.timesteps, self.num_inference_steps = self.calc_strength_timesteps(
                     self.num_inference_steps,
                     self.strength,
-                    self.device)
+                    self.onload_device)
 
         result = Timesteps(self.timesteps, self.num_inference_steps)
 
