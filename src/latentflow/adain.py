@@ -6,6 +6,7 @@ from einops import rearrange
 
 from .flow import Flow
 from .video import Video
+from .latent import Latent
 from .video_load import VideoLoad
 from .interpolate import Interpolate
 from .tensor import Tensor
@@ -63,31 +64,41 @@ class Adain(Flow):
     def offload(self):
         self.style.offload()
 
-    def apply(self, video: Video) -> Video:
+    def apply(self, video):
 
         self.onload()
         video.onload()
 
-        vid = video.hwc()
-        video_length = vid.shape[1]
+        if isinstance(video, Video):
+            vid = video.hwc()
+            video_length = vid.shape[1]
 
-        ref = self.style
-        if len(ref.shape) == 3: #image
-            ref = ref.unsqueeze(0).unsqueeze(0)
-        elif len(ref.shape) == 4: #video
-            ref = ref.unsqueeze(0)
-        ref = ref.repeat(1,video_length,1,1,1)
-        ref = rearrange(ref, 'b f h w c -> b c f h w')
-        ref = ref.to(vid.device, torch.float)/255
-        ref = Interpolate(size=(video_length, vid.shape[2], vid.shape[3]), mode='trilinear').apply(Tensor(ref)).tensor
+            ref = self.style
+            if len(ref.shape) == 3: #image
+                ref = ref.unsqueeze(0).unsqueeze(0)
+            elif len(ref.shape) == 4: #video
+                ref = ref.unsqueeze(0)
+            ref = ref.repeat(1,video_length,1,1,1)
+            ref = rearrange(ref, 'b f h w c -> b c f h w')
+            ref = ref.to(vid.device, torch.float)/255
+            ref = Interpolate(size=(video_length, vid.shape[2], vid.shape[3]), mode='trilinear').apply(Tensor(ref)).tensor
 
-        vid = vid.to(torch.float)/255
-        vid = rearrange(vid, 'b f h w c -> b c f h w')
-        vid = adaptive_instance_normalization(vid, ref)
-        vid = torch.clamp(vid * 255, 0, 255).to(torch.uint8)
-        vid = rearrange(vid, 'b c f h w -> b f h w c')
+            vid = vid.to(torch.float)/255
+            vid = rearrange(vid, 'b f h w c -> b c f h w')
+            vid = adaptive_instance_normalization(vid, ref)
+            vid = torch.clamp(vid * 255, 0, 255).to(torch.uint8)
+            vid = rearrange(vid, 'b c f h w -> b f h w c')
+
+            result = Video('HWC', vid)
+
+        elif isinstance(video, Latent):
+            pass
+        else:
+            raise Exception("Unknown input type")
+
 
         video.offload()
         self.offload()
+        result.offload()
 
-        return Video('HWC', vid)
+        return result

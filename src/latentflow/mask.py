@@ -40,6 +40,9 @@ class Mask(Flow):
     def video(self):
         return Video('HWC', self.mask)
 
+    def hwc(self):
+        return self.video().hwc()
+
     def resize(self, size):
         v = self.mask
         v = F.interpolate(

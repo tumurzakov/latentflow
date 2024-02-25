@@ -14,11 +14,13 @@ class Unet(Flow):
             unet,
             scheduler,
             fp16 = False,
+            freeu = None,
             onload_device: str='cuda',
             offload_device: str='cpu',
             ):
 
         self.unet = unet
+        self.freeu = freeu
         self.scheduler = scheduler
         self.fp16 = fp16
         self.onload_device = onload_device
@@ -52,6 +54,8 @@ class Unet(Flow):
 
     def onload(self):
         self.unet = self.unet.to(self.onload_device)
+        if self.freeu is not None:
+            self.unet.enable_freeu(*self.freeu)
 
     def offload(self):
         self.unet = self.unet.to(self.offload_device)
