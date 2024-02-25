@@ -112,6 +112,7 @@ class LatentAdd(Flow):
 
         other.onload()
         self.latent.onload()
+        self.mask.onload()
 
         s = self.latent.latent
         l = other.latent
@@ -129,5 +130,6 @@ class LatentAdd(Flow):
 
         other.offload()
         self.latent.offload()
+        self.mask.offload
 
         return self.latent
