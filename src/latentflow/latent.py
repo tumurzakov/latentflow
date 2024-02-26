@@ -98,7 +98,13 @@ class Latent(Flow):
 
 
 class NoisePredict(Latent):
-    pass
+    def __str__(self):
+        if self.latent is not None:
+            shape = self.latent.shape
+            device = self.latent.device
+            dtype = self.latent.dtype
+            return f'NoisePredict({shape}, {device}, {dtype})'
+
 
 class LatentAdd(Flow):
     def __init__(self, latent, key=None, mask=None):
@@ -112,14 +118,16 @@ class LatentAdd(Flow):
 
         other.onload()
         self.latent.onload()
-        self.mask.onload()
+
+        if self.mask is not None:
+            self.mask.onload()
 
         s = self.latent.latent
         l = other.latent
 
         if self.mask is not None:
             if self.key is not None:
-                l = l * self.mask.mask[self.key]
+                l = l * self.mask[self.key].mask
             else:
                 l = l * self.mask.mask
 
@@ -130,6 +138,8 @@ class LatentAdd(Flow):
 
         other.offload()
         self.latent.offload()
-        self.mask.offload
+
+        if self.mask is not None:
+            self.mask.offload()
 
         return self.latent

@@ -25,6 +25,22 @@ class Mask(Flow):
     def offload(self):
         self.mask = self.mask.to(self.offload_device)
 
+    def apply(self, other):
+        self.onload()
+        other.onload()
+
+        result = other
+        if isinstance(other, Latent):
+            result = Latent(other.latent * self.mask)
+        elif isinstance(other, Video):
+            result = Video('HWC', other.video * self.mask)
+
+        other.offload()
+        self.offload()
+        result.offload()
+
+        return result
+
     def __str__(self):
         return f'Mask({self.mask.shape})'
 

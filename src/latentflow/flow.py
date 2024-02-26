@@ -39,6 +39,19 @@ class If(Flow):
         else:
             return other
 
+class Switch(Flow):
+    def __init__(self, callback, if_true, if_false):
+        self.callback = callback
+        self.if_true = if_true
+        self.if_false = if_false
+        logging.debug("Switch init")
+
+    def apply(self, other):
+        cond = self.callback(other)
+        logging.debug("Switch apply %s", cond)
+        return self.if_true.apply(other) if cond else self.if_false.apply(other)
+
+
 class Set(Flow):
     def __init__(self, var, key=None):
         self.var = var

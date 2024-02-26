@@ -21,7 +21,7 @@ from latentflow.schedule import Schedule
 from latentflow.debug import Debug, DebugHash, Info, Error, DebugCUDAUsage
 from latentflow.invert import Invert
 from latentflow.bypass import Bypass
-from latentflow.lora import LoraOn, LoraOff
+from latentflow.lora import LoraOn, LoraOff, LoraMerge
 from latentflow.apply import Apply
 from latentflow.controlnet import ControlNet,ControlNetLatent
 from latentflow.loop import Loop
@@ -32,7 +32,7 @@ from latentflow.mask import MaskEncode, Mask, LatentMaskCut, VideoMaskCut, Laten
 from latentflow.region import Region
 from latentflow.noop import Noop
 from latentflow.interpolate import Interpolate
-from latentflow.flow import If, Set
+from latentflow.flow import If, Set, Switch
 from latentflow.nn_latent_upscale import NNLatentUpscale
 from latentflow.slice import slice_scale
 from latentflow.comfy_ip_adapter_prompt_encode import ComfyIPAdapterPromptEncode

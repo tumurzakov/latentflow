@@ -19,6 +19,7 @@ class Region(Flow):
             source_latent = None,
             latent = None,
             scheduler = None,
+            name = None,
             ):
         self.scheduler = scheduler
         self.controlnet_image = controlnet_image
@@ -29,6 +30,7 @@ class Region(Flow):
         self.source_latent = source_latent
         self.latent = latent
         self.timesteps = Timesteps()
+        self.name = name
 
     def apply(self, prompt: Prompt):
         self.prompt = prompt

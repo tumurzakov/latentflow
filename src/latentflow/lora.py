@@ -1,6 +1,8 @@
+import os
 import torch
 import logging
 import hashlib
+from safetensors.torch import save_file, safe_open
 
 from .flow import Flow
 
@@ -17,7 +19,6 @@ class LoraOn(Flow):
 
 
     def onload(self):
-        self.pipe.enable_lora()
         self.pipe.unload_lora_weights()
 
         for lora in self.loras:
@@ -28,12 +29,9 @@ class LoraOn(Flow):
             self.lora_weights.append(scale)
             logging.debug('LoraOn load %s %f', lora, scale)
 
-        if self.fuse:
-            self.pipe.fuse_lora()
-
     def offload(self):
-        self.pipe.enable_lora()
-        self.pipe.unload_lora_weights()
+        if self.fuse:
+            self.pipe.unload_lora_weights()
 
     def apply(self, other=None):
         logging.debug("LoraOn apply %s %s", self.loras, type(other))
@@ -42,6 +40,9 @@ class LoraOn(Flow):
 
         self.pipe.set_adapters(self.lora_adapters, self.lora_weights)
 
+        if self.fuse:
+            self.pipe.fuse_lora(adapter_names=self.lora_adapters)
+
         logging.debug("LoraOn active %s", self.pipe.get_active_adapters())
 
         self.offload()
@@ -49,13 +50,42 @@ class LoraOn(Flow):
         return other
 
 class LoraOff(Flow):
-    def __init__(self, pipe=None):
+    def __init__(self, pipe=None, unfuse=False):
         self.pipe = pipe
+        self.unfuse = unfuse
         logging.debug('LoraOff init')
 
     def apply(self, other):
         logging.debug('LoraOff apply %s', type(other))
 
+        if self.unfuse:
+            self.pipe.unfuse_lora()
+
         self.pipe.unload_lora_weights()
 
         return other
+
+class LoraMerge(Flow):
+    def __init__(self, loras, file):
+        self.loras = loras
+        self.file = file
+
+    def apply(self, other):
+        if not os.path.isfile(self.file):
+            self.merge()
+
+        return other
+
+    def merge(self):
+        state_dict = {}
+        for lora in self.loras:
+            scale = self.loras[lora]
+            with safe_open(lora, framework="pt", device='cpu') as f:
+                for key in f.keys():
+                    if key not in state_dict:
+                        state_dict[key] = f.get_tensor(key) * scale
+                    else:
+                        state_dict[key] += f.get_tensor(key) * scale
+
+
+        save_file(state_dict, self.file)
