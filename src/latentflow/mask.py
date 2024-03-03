@@ -9,6 +9,7 @@ import numpy as np
 
 from .flow import Flow
 from .video import Video
+from .video_show import VideoShow
 from .latent import Latent
 
 class Mask(Flow):
@@ -63,7 +64,22 @@ class Mask(Flow):
         return Mask(1-self.mask)
 
     def video(self):
-        return Video('HWC', rearrange(self.mask, f'{self.mode} -> b f h w c'))
+        if self.mode == 'b f h w c':
+            return Video('HWC', self.mask)
+        else: # latent
+            mask = self.mask.float()
+            mask = F.interpolate(
+                mask,
+                size=(mask.shape[2], mask.shape[3]*8, mask.shape[4]*8),
+                mode='trilinear',
+                align_corners=False
+                )
+            mask = rearrange(mask, f'{self.mode} -> b f h w c')
+            mask = mask.repeat(1,1,1,1,3)
+            mask = mask * 255
+            mask = mask.to(torch.uint8)
+
+            return Video('HWC', mask)
 
     def hwc(self):
         return self.video().hwc()
@@ -83,7 +99,8 @@ class Mask(Flow):
         if self.mode != 'b f c h w':
             mask = rearrange(mask, f'{self.mode} -> b f c h w')
 
-        mask = torch.sum(mask, dim=2, keepdim=True) # (1, 1, 1, h, w)
+        mask = torch.sum(mask, dim=2, keepdim=True) # (1, f, 1, h, w)
+        mask = torch.sum(mask, dim=1, keepdim=True) # (1, 1, 1, h, w)
         mask = mask.clamp(0, 1)
         mask = mask.to(torch.uint8)
 
@@ -395,3 +412,12 @@ class LatentMaskMerge(Flow):
 
     def apply(self, other):
         return Latent(self.background.latent * (1 - self.mask.mask) + self.foreground.latent * self.mask.mask)
+
+class MaskShow(Flow):
+    def __init__(self, fps):
+        self.fps = fps
+
+    def apply(self, mask):
+        video = mask.video()
+        VideoShow(fps=self.fps).apply(video)
+        return mask

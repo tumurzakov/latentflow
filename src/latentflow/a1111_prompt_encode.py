@@ -25,11 +25,13 @@ class A1111PromptEncode(Flow):
             text_encoder: CLIPTextModel,
             onload_device: str='cuda',
             offload_device: str='cpu',
+            clip_skip: int=1,
             ):
         self.tokenizer = tokenizer
         self.text_encoder = text_encoder
         self.onload_device = onload_device
         self.offload_device = offload_device
+        self.clip_skip = clip_skip
 
         logging.debug("A1111PromptEncode init")
 
@@ -82,6 +84,7 @@ class A1111PromptEncode(Flow):
                 self.text_encoder,
                 prompt=prompt,
                 negative_prompt=negative_prompt,
+                clip_stop_at_last_layers=self.clip_skip,
                 )
         embeddings = torch.cat([uncond_embeddings, cond_embeddings])
         return embeddings

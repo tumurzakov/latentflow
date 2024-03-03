@@ -29,7 +29,7 @@ try:
     from latentflow.tile import Tile, TileGenerator, UniformFrameTileGenerator, AddTileEncoding
     from latentflow.step import Step
     from latentflow.tensor import Tensor,TensorAdd
-    from latentflow.mask import MaskEncode, Mask, LatentMaskCut, VideoMaskCut, LatentMaskMerge, LatentMaskCrop
+    from latentflow.mask import MaskEncode, Mask, LatentMaskCut, VideoMaskCut, LatentMaskMerge, LatentMaskCrop, MaskShow
     from latentflow.region import Region
     from latentflow.noop import Noop
     from latentflow.interpolate import Interpolate

@@ -35,9 +35,9 @@ class CompelPromptEncode(Flow):
             tokenizer=self.tokenizer,
             text_encoder=self.text_encoder,
             device=self.onload_device,
-            #returned_embeddings_type=\
-            #    ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED if self.clip_skip \
-            #        else ReturnedEmbeddingsType.LAST_HIDDEN_STATES_NORMALIZED,
+            returned_embeddings_type=\
+                ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NORMALIZED if self.clip_skip \
+                    else ReturnedEmbeddingsType.LAST_HIDDEN_STATES_NORMALIZED,
         )
 
     def offload(self):
