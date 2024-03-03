@@ -3,6 +3,7 @@ import torch
 from typing import List, Optional, Tuple, Union, Generator
 
 from .flow import Flow
+from .prompt_embeddings import PromptEmbeddings
 
 class Prompt(Flow):
     def __init__(self,

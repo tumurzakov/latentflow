@@ -71,6 +71,11 @@ class Video(Flow):
 
         return self
 
+    def scale(self, scale):
+        v = self.chw().float()
+        size = (int(v.shape[1]), int(v.shape[3]*scale), int(v.shape[4]*scale))
+        return self.resize(size)
+
     def resize(self, size):
         v = self.chw().float()
         v = rearrange(v, 'b f c h w -> b c f h w')

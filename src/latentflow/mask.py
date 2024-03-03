@@ -4,6 +4,9 @@ import logging
 import torch.nn.functional as F
 from einops import rearrange
 
+import cv2
+import numpy as np
+
 from .flow import Flow
 from .video import Video
 from .latent import Latent
@@ -13,10 +16,16 @@ class Mask(Flow):
             mask: torch.Tensor,
             onload_device: str='cuda',
             offload_device: str='cpu',
+            mode: str = 'b c f h w',
+            origin = None,
+            origin_tile = None,
             ):
         self.mask = mask
         self.onload_device = onload_device
         self.offload_device = offload_device
+        self.origin = origin
+        self.origin_tile = origin_tile
+        self.mode = mode
         logging.debug(f'{self}')
 
     def onload(self):
@@ -45,7 +54,7 @@ class Mask(Flow):
         return f'Mask({self.mask.shape})'
 
     def __getitem__(self, key):
-        return Mask(self.mask[key])
+        return Mask(self.mask[key], origin=self, origin_tile=key)
 
     def size(self):
         return (self.mask.shape[2], self.mask.shape[3])
@@ -54,7 +63,7 @@ class Mask(Flow):
         return Mask(1-self.mask)
 
     def video(self):
-        return Video('HWC', self.mask)
+        return Video('HWC', rearrange(self.mask, f'{self.mode} -> b f h w c'))
 
     def hwc(self):
         return self.video().hwc()
@@ -69,6 +78,39 @@ class Mask(Flow):
                 )
         return Mask(mask=v)
 
+    def shrink(self):
+        mask = self.mask
+        if self.mode != 'b f c h w':
+            mask = rearrange(mask, f'{self.mode} -> b f c h w')
+
+        mask = torch.sum(mask, dim=2, keepdim=True) # (1, 1, 1, h, w)
+        mask = mask.clamp(0, 1)
+        mask = mask.to(torch.uint8)
+
+        chan = mask[0][0][0]
+        chan = chan.detach().numpy()
+        contours, _ = cv2.findContours(chan, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        shape = self.mask.shape
+        tile =[
+                slice(0, shape[0]),
+                slice(0, shape[1]),
+                slice(0, shape[2]),
+                slice(0, shape[3]),
+                slice(0, shape[4]),
+                ]
+
+        origin = None
+        origin_tile = tile
+        if contours:
+            x, y, w, h = cv2.boundingRect(contours[0])
+            dims = self.mode.split(' ')
+            tile[dims.index('h')] = slice(y, y+h)
+            tile[dims.index('w')] = slice(x, x+w)
+            origin = self
+            origin_tile = tile
+
+        return Mask(self.mask[tile], origin=origin, origin_tile=origin_tile)
 
 class MaskEncode(Flow):
     def __init__(self,
@@ -107,7 +149,7 @@ class MaskEncode(Flow):
         mask = mask.repeat(self.channels, 1, 1, 1, 1)
         mask = rearrange(mask, f'c b f h w -> {self.mode}')
 
-        mask = Mask(mask=mask)
+        mask = Mask(mask=mask, mode=self.mode)
 
         logging.debug('MaskEncode mask %s', mask)
 

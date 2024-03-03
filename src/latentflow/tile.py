@@ -264,26 +264,56 @@ class TileGenerator(Flow):
                         self.append_tile(tile)
 
 class AddTileEncoding(Flow):
-    def __init__(self, tile):
+    def __init__(self,
+            tile,
+            tokenizer,
+            text_encoder,
+            onload_device='cuda',
+            offload_device='cpu'):
+
         self.tile = tile
+        self.tokenizer = tokenizer
+        self.text_encoder = text_encoder
+        self.onload_device = onload_device
+        self.offload_device = offload_device
+
+    def onload(self):
+        self.text_encoder.to(self.onload_device)
+
+    def offload(self):
+        self.text_encoder.to(self.offload_device)
 
     def apply(self, embeddings):
-        embeddings = embeddings.embeddings
+        self.onload()
+        embeddings.onload()
+
+        embeds = embeddings.embeddings
+
+        uncond, cond = embeds.chunk(2)
+
         tile = self.tile
+        tile_z, tile_y, tile_x, tile_h, tile_w = tile[2][0],tile[3].start,tile[4].start,tile[3].stop,tile[4].stop
 
-        uncond, cond = embeddings.chunk(2)
-
-        tile_cond = torch.zeros_like(cond[:,:1,:])
-        tile_cond[:,:,0:3] = torch.stack([
-            torch.tensor(tile[2][0]),
-            torch.tensor(tile[3].start),
-            torch.tensor(tile[4].start),
-            ])
-
+        prompt = f"tileZ{tile_z}X{tile_y}Y{tile_x}W{tile_h}H{tile_w}"
+        prompt_ids = self.tokenizer(
+            prompt,
+            max_length=self.tokenizer.model_max_length,
+            padding="max_length",
+            truncation=True,
+            return_tensors="pt"
+        ).input_ids
+        tile_cond = self.text_encoder(prompt_ids.to(self.onload_device))[0]
+        video_length = cond.shape[0]
+        tile_cond = tile_cond.repeat(video_length, 1, 1)
         tile_uncond = torch.zeros_like(tile_cond)
+
         cond = torch.cat([cond, tile_cond], dim=1)
         uncond = torch.cat([uncond, tile_uncond], dim=1)
-        embeddings = torch.cat([uncond, cond])
-        return PromptEmbeddings(embeddings)
+        embeds = torch.cat([uncond, cond])
+        result = PromptEmbeddings(embeds)
 
+        embeddings.offload()
+        result.offload()
+        self.offload()
 
+        return result

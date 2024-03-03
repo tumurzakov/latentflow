@@ -2,6 +2,7 @@ import os
 import torch
 import logging
 import hashlib
+from peft import LoraConfig
 from safetensors.torch import save_file, safe_open
 
 from .flow import Flow
@@ -64,6 +65,24 @@ class LoraOff(Flow):
         self.pipe.unload_lora_weights()
 
         return other
+
+class LoraInitTrain(Flow):
+    def __init__(self, unet, rank):
+        self.unet = unet
+        self.rank = rank
+
+    def apply(self, other):
+        unet_lora_config = LoraConfig(
+            r=self.rank,
+            lora_alpha=self.rank,
+            init_lora_weights="gaussian",
+            target_modules=["to_k", "to_q", "to_v", "to_out.0"],
+        )
+
+        self.unet.add_adapter(unet_lora_config)
+
+        return other
+
 
 class LoraMerge(Flow):
     def __init__(self, loras, file):

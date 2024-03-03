@@ -1,6 +1,6 @@
 import torch
 import logging
-from compel import Compel
+from compel import Compel, ReturnedEmbeddingsType
 from einops import rearrange
 import gc
 
@@ -16,6 +16,7 @@ class CompelPromptEncode(Flow):
             weight=1.0,
             onload_device='cuda',
             offload_device='cpu',
+            clip_skip=False,
             ):
         self.tokenizer = tokenizer
         self.text_encoder = text_encoder
@@ -23,6 +24,7 @@ class CompelPromptEncode(Flow):
         self.weight = weight
         self.onload_device = onload_device
         self.offload_device = offload_device
+        self.clip_skip = clip_skip
 
         logging.debug("CompelPromptEncode init")
 
@@ -33,6 +35,9 @@ class CompelPromptEncode(Flow):
             tokenizer=self.tokenizer,
             text_encoder=self.text_encoder,
             device=self.onload_device,
+            #returned_embeddings_type=\
+            #    ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED if self.clip_skip \
+            #        else ReturnedEmbeddingsType.LAST_HIDDEN_STATES_NORMALIZED,
         )
 
     def offload(self):
