@@ -20,6 +20,7 @@ class Mask(Flow):
             mode: str = 'b c f h w',
             origin = None,
             origin_tile = None,
+            threshold = 200,
             ):
         self.mask = mask
         self.onload_device = onload_device
@@ -34,6 +35,9 @@ class Mask(Flow):
 
     def offload(self):
         self.mask = self.mask.to(self.offload_device)
+
+    def binarize(self, threshold=0.5):
+        return Mask((self.mask > threshold).to(torch.float), origin=self)
 
     def apply(self, other):
         self.onload()
@@ -51,11 +55,23 @@ class Mask(Flow):
 
         return result
 
+    def cfg(self, guidance_scale):
+        repeat = 2 if guidance_scale > 1.0 else 1
+        return Mask(self.mask.repeat(repeat,1,1,1,1))
+
     def __str__(self):
         return f'Mask({self.mask.shape})'
 
     def __getitem__(self, key):
         return Mask(self.mask[key], origin=self, origin_tile=key)
+
+    def __add__(self, other):
+        return Mask(torch.clamp(self.mask + other.mask, 0, 1))
+
+    def __sub__(self, other):
+        if isinstance(other, Mask):
+            return Mask(torch.clamp(self.mask - other.mask, 0, 1))
+        return self
 
     def size(self):
         return (self.mask.shape[2], self.mask.shape[3])
@@ -93,6 +109,27 @@ class Mask(Flow):
                 align_corners=False
                 )
         return Mask(mask=v)
+
+    def flatten(self):
+        orig_mask = mask = self.mask
+        if self.mode != 'b f c h w':
+            mask = rearrange(mask, f'{self.mode} -> b f c h w')
+
+        mask = torch.sum(mask, dim=2, keepdim=True) # (1, f, 1, h, w)
+        mask = torch.sum(mask, dim=1, keepdim=True) # (1, 1, 1, h, w)
+        mask = mask.clamp(0, 1)
+        mask = mask.to(torch.uint8)
+        mask = mask.repeat(1, orig_mask.shape[1], orig_mask.shape[2], 1, 1)
+
+        tile =[
+                slice(0, mask.shape[0]),
+                slice(0, mask.shape[1]),
+                slice(0, mask.shape[2]),
+                slice(0, mask.shape[3]),
+                slice(0, mask.shape[4]),
+                ]
+
+        return Mask(mask, origin=self, origin_tile=tile)
 
     def shrink(self):
         mask = self.mask
@@ -421,3 +458,8 @@ class MaskShow(Flow):
         video = mask.video()
         VideoShow(fps=self.fps).apply(video)
         return mask
+
+class MaskFlatten(Flow):
+    def apply(self, other):
+        assert isinstance(other, Mask)
+        return Mask(other.mask.flatten())

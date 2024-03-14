@@ -143,3 +143,43 @@ class LatentAdd(Flow):
             self.mask.offload()
 
         return self.latent
+
+class LatentSet(Flow):
+    def __init__(self, latent, key=None, mask=None):
+        self.latent = latent
+        self.key = key
+        self.mask = mask
+
+    def apply(self, other):
+        logging.debug("LatentSet.apply %s[%s] %s %s", \
+                self.latent, self.key, other, self.mask)
+
+        other.onload()
+        self.latent.onload()
+
+        if self.mask is not None:
+            self.mask.onload()
+
+        s = self.latent.latent
+        l = other.latent
+
+        if self.mask is not None:
+            if self.key is not None:
+                s[self.key] = s[self.key] * self.mask.invert()[self.key].binarize().mask
+                l = l * self.mask[self.key].mask
+            else:
+                s = s * self.mask.invert().mask
+                l = l * self.mask.mask
+
+        if self.key is not None:
+            s[self.key] += l
+        else:
+            s += l
+
+        other.offload()
+        self.latent.offload()
+
+        if self.mask is not None:
+            self.mask.offload()
+
+        return self.latent

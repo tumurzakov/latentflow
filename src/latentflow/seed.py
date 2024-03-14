@@ -8,7 +8,7 @@ class Seed(Flow):
         if seed is None:
             seed = torch.seed()
 
-        self.seed = seed
+        self.seed = int(seed)
         torch.manual_seed(self.seed)
 
         logging.debug(f'{self}')

@@ -12,17 +12,19 @@ class Prompt(Flow):
             image = None,
             negative_image = None,
             frames: List = None,
+            prompts: List = None,
             embeddings = None,
             ):
+
         self.prompt = prompt
         self.negative_prompt = negative_prompt
         self.image = image
         self.negative_image = negative_image
         self.frames = frames
-        self.prompts = None
+        self.prompts = prompts
         self.embeddings = embeddings
 
-        if frames is not None:
+        if prompts is None and frames is not None:
             self.prompts = [None for x in range(max(frames)+1)]
             for x in range(max(frames)+1):
                 if x in self.frames:
@@ -51,6 +53,27 @@ class Prompt(Flow):
         if self.embeddings is not None:
             self.embeddings.offload()
 
+    def __add__(self, prompt):
+        assert prompt.prompts is not None
+        assert prompt.frames is not None
+
+        prompts = [None for x in range(max(max(self.frames),max(prompt.frames))+1)]
+        frames = []
+
+        for i, p in enumerate(self.prompts):
+            if p is not None:
+                prompts[i] = p
+                frames.append(i)
+
+        for i, p in enumerate(prompt.prompts):
+            if p is not None:
+                prompts[i] = p
+                frames.append(i)
+
+        frames = list(set(frames))
+        frames.sort()
+
+        return Prompt(prompts=prompts, frames=frames)
 
     def set(self, prompt):
         frames = [None for x in range(max(max(self.frames), max(prompt.frames))+1)]
@@ -79,7 +102,7 @@ class Prompt(Flow):
         return other
 
     def __str__(self):
-        return f'Prompt(+[{self.prompt}], -[{self.negative_prompt}])'
+        return f'Prompt(+[{self.prompt}], -[{self.negative_prompt}]) {self.frames}'
 
     def save(self, path):
         assert self.embeddings is not None, "Embeddings are empty"

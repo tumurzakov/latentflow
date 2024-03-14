@@ -94,8 +94,8 @@ class ComfyIPAdapterPromptEncode(Flow):
 
         self.tensor_cache = {}
 
-        if self.pipe is not None:
-            self.set_ip_adapter()
+        #if self.pipe is not None:
+        #    self.set_ip_adapter()
 
     def offload(self):
         del self.insightface
@@ -122,7 +122,9 @@ class ComfyIPAdapterPromptEncode(Flow):
         unet = self.pipe.unet
         attn_procs = {}
         for name in unet.attn_processors.keys():
+
             cross_attention_dim = None if name.endswith("attn1.processor") else unet.config.cross_attention_dim
+
             if name.startswith("mid_block"):
                 hidden_size = unet.config.block_out_channels[-1]
             elif name.startswith("up_blocks"):
@@ -131,11 +133,14 @@ class ComfyIPAdapterPromptEncode(Flow):
             elif name.startswith("down_blocks"):
                 block_id = int(name[len("down_blocks.")])
                 hidden_size = unet.config.block_out_channels[block_id]
+
             if cross_attention_dim is None:
                 attn_procs[name] = AttnProcessor()
             else:
                 attn_procs[name] = IPAttnProcessor(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim).to(self.device, dtype=self.dtype)
+
         unet.set_attn_processor(attn_procs)
+
         if hasattr(self.pipe, "controlnet") and self.pipe.controlnet is not None:
             if isinstance(self.pipe.controlnet, MultiControlNetModel):
                 for controlnet in self.pipe.controlnet.nets:

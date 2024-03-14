@@ -1,8 +1,14 @@
 include env
 export
 
+PYTHON_UNIT=cd tests/unit; PYTHONPATH=../../src python
+PYTHON_FUNC=cd tests/func; PYTHONPATH="../../src:$(ANIMATEDIFF_PATH):$(COMFYUI_PATH)" python
+
 unit:
-	cd tests/unit; PYTHONPATH=../../src python -m unittest *_test.py
+	$(PYTHON_UNIT) -m unittest *_test.py
 
 func:
-	cd tests/func; PYTHONPATH="../../src:$(ANIMATEDIFF_PATH):$(COMFYUI_PATH)" python -m unittest test_*.py
+	$(PYTHON_FUNC) -m unittest test_*.py
+
+func_single:
+	$(PYTHON_FUNC) -m unittest $(FILE) -v; \

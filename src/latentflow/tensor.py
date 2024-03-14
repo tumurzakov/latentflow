@@ -30,6 +30,9 @@ class Tensor(Flow):
     def load(self, path, device='cpu'):
         return Tensor(torch.load(path).to(device))
 
+    def __getitem__(self, key):
+        return Tensor(self.tensor[key])
+
     def __str__(self):
         return f'Tensor({self.tensor.shape})'
 

@@ -17,7 +17,7 @@ class Noise(Flow):
             offload_device: str='cpu',
             ):
         self.scheduler = scheduler
-        self.scale = scale
+        self.scale = scale if scale is not None else 0.0
         self.mask = mask
         self.onload_device = onload_device
         self.offload_device = offload_device

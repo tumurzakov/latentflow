@@ -15,6 +15,7 @@ from omegaconf import OmegaConf
 
 from diffusers.models.attention_processor import AttnProcessor2_0
 import hashlib
+#from safetensors import safe_open
 
 from .flow import Flow
 from .latent import Latent
@@ -28,6 +29,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
     def load(cls,
             pretrained_model_path,
             motion_module_path,
+            #dreambooth_path=None,
             unet_path=None,
             text_encoder_path=None,
             vae_path=None,
@@ -60,6 +62,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
             pretrained_model_path=pretrained_model_path,
             motion_module_path=motion_module_path,
             motion_module_config_path=motion_module_config_path,
+            #dreambooth_path=dreambooth_path,
             text_encoder_path=text_encoder_path,
             unet_path=unet_path,
             vae_path=vae_path,
@@ -125,6 +128,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         pretrained_model_path,
         motion_module_path,
         motion_module_config_path=None,
+        #dreambooth_path=None,
         text_encoder_path = None,
         unet_path = None,
         vae_path = None,
@@ -163,8 +167,8 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         logging.debug("AnimateDiffPipelineLoad load tokenizer %s", pretrained_model_path)
         tokenizer = CLIPTokenizer.from_pretrained(pretrained_model_path, subfolder="tokenizer")
         if extra_tokens is not None:
-          added = tokenizer.add_tokens(extra_tokens)
-          logging.info("Extra tokens added: %s %d", extra_tokens, added)
+            added = tokenizer.add_tokens(extra_tokens)
+            logging.info("Extra tokens added: %s %d", extra_tokens, added)
 
         logging.debug("AnimateDiffPipelineLoad text_encoder %s", text_encoder_path)
         text_encoder = CLIPTextModel.from_pretrained(text_encoder_path, subfolder="text_encoder")
@@ -223,6 +227,9 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
                 controlnet=controlnet if controlnet is not None and len(controlnet) > 0 else None,
                 )
 
+        #if dreambooth_path is not None:
+        #    pipeline = cls.load_dreambooth(pipeline, dreambooth_path)
+
         pipeline.onload_device = onload_device
         pipeline.offload_device = offload_device
 
@@ -243,3 +250,29 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
             unet = torch.compile(unet, mode="reduce-overhead", fullgraph=True)
 
         return pipeline
+
+    #@classmethod
+    #def load_dreambooth(cls, pipeline, dreambooth_path):
+
+    #    assert dreambooth_path.endswith(".safetensors"), 'dreambooth_path must end with safetensors'
+
+    #    state_dict = {}
+    #    with safe_open(dreambooth_path, framework="pt", device="cpu") as f:
+    #        for key in f.keys():
+    #            state_dict[key] = f.get_tensor(key)
+
+    #    base_state_dict = state_dict
+
+    #    # vae
+    #    converted_vae_checkpoint = convert_ldm_vae_checkpoint(base_state_dict, pipeline.vae.config)
+    #    pipeline.vae.load_state_dict(converted_vae_checkpoint)
+
+    #    # unet
+    #    converted_unet_checkpoint = convert_ldm_unet_checkpoint(base_state_dict, pipeline.unet.config)
+    #    pipeline.unet.load_state_dict(converted_unet_checkpoint, strict=False)
+
+    #    # text_model
+    #    pipeline.text_encoder = convert_ldm_clip_checkpoint(base_state_dict)
+
+    #    return pipeline
+

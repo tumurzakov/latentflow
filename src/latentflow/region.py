@@ -11,18 +11,20 @@ from .timesteps import Timesteps
 
 class Region(Flow):
     def __init__(self,
-            controlnet_image: Video = None,
+            controlnet_video: List = None,
             controlnet_scale: List = None,
             mask: Mask=None,
-            loras = None,
+            loras = {},
             guidance_scale = None,
             source_latent = None,
             latent = None,
             scheduler = None,
             name = None,
+            start_timestep = None,
+            stop_timestep = None,
             ):
         self.scheduler = scheduler
-        self.controlnet_image = controlnet_image
+        self.controlnet_video = controlnet_video
         self.controlnet_scale = controlnet_scale
         self.mask = mask
         self.loras = loras
@@ -31,6 +33,8 @@ class Region(Flow):
         self.latent = latent
         self.timesteps = Timesteps()
         self.name = name
+        self.start_timestep = start_timestep
+        self.stop_timestep = stop_timestep
 
     def apply(self, prompt: Prompt):
         self.prompt = prompt

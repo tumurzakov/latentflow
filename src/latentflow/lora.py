@@ -6,6 +6,7 @@ from peft import LoraConfig
 from safetensors.torch import save_file, safe_open
 
 from .flow import Flow
+from .unet import Unet
 
 class LoraOn(Flow):
     def __init__(self, loras: dict = {}, pipe=None, fuse=False):
@@ -67,11 +68,14 @@ class LoraOff(Flow):
         return other
 
 class LoraInitTrain(Flow):
-    def __init__(self, unet, rank):
+    def __init__(self, rank, unet=None):
         self.unet = unet
         self.rank = rank
 
     def apply(self, other):
+        if isinstance(other, Unet):
+            self.unet = other.unet
+
         unet_lora_config = LoraConfig(
             r=self.rank,
             lora_alpha=self.rank,

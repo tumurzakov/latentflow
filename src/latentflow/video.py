@@ -24,6 +24,8 @@ class Video(Flow):
             offload_device: Optional[Union[str, torch.device]] = 'cpu',
             ):
 
+        assert isinstance(mode, str), 'Mode must be first parameter of Video'
+
         self.video = video
         self.onload_device = onload_device
         self.offload_device = offload_device
@@ -38,6 +40,9 @@ class Video(Flow):
     def offload(self):
         if self.video is not None:
             self.video = self.video.to(self.offload_device)
+
+    def __len__(self):
+        return self.video.shape[1]
 
     def __str__(self):
         if self.video is not None:
