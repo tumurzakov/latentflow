@@ -7,6 +7,8 @@ class Seed(Flow):
     def __init__(self, seed=None):
         if seed is None:
             seed = torch.seed()
+        elif isinstance(seed, Seed):
+            seed = seed.seed
 
         self.seed = int(seed)
         torch.manual_seed(self.seed)

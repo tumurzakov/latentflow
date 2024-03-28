@@ -4,11 +4,18 @@ import logging
 
 from .flow import Flow
 
-def tensor_hash(tensor):
-    tensor_bytes = tensor.detach().cpu().numpy().tobytes()
-    hash_object = hashlib.sha256(tensor_bytes)
-    hash_value = hash_object.hexdigest()
-    return hash_value
+def tensor_hash(tensors):
+    if isinstance(tensors, torch.Tensor):
+        tensors = [tensors]
+
+    assert isinstance(tensors, list), 'tensors must be list'
+
+    hash_obj = hashlib.sha256()
+    for tensor in tensors:
+        flat_tensor = tensor.flatten()
+        tensor_bytes = flat_tensor.detach().cpu().numpy().tobytes()
+        hash_obj.update(tensor_bytes)
+    return hash_obj.hexdigest()
 
 class Log(Flow):
     def __init__(self, level=logging.DEBUG, comment="", callback=None):

@@ -3,6 +3,8 @@ import logging
 from compel import Compel, ReturnedEmbeddingsType
 from einops import rearrange
 import gc
+import json
+from tqdm import tqdm
 
 from .flow import Flow
 from .prompt import Prompt
@@ -56,14 +58,23 @@ class CompelPromptEncode(Flow):
 
         if prompt.prompts is not None:
 
+            self.cache = {}
+            last = None
+
             embeddings = []
-            for i, p in enumerate(prompt.prompts):
-                e = self.encode(
-                        prompt=p.prompt,
-                        negative_prompt=p.negative_prompt,
-                        )
+            for i, p in enumerate(tqdm(prompt.prompts)):
+                if p is not None:
+                    e = self.encode(
+                            prompt=p.prompt,
+                            negative_prompt=p.negative_prompt,
+                            )
+                    p.embeddings = PromptEmbeddings(e)
+                    last = p
+                else:
+                    assert last is not None, "Last embedding must exist"
+                    e = last.embeddings.embeddings
+
                 embeddings.append(e)
-                p.embeddings = PromptEmbeddings(e)
 
             length = len(prompt.prompts)
             bs_embed, seq_len, _ = embeddings[0].shape
@@ -84,6 +95,11 @@ class CompelPromptEncode(Flow):
         return prompt
 
     def encode(self, prompt, negative_prompt, num_videos_per_prompt=1):
+
+        cache_key = json.dumps([prompt, negative_prompt])
+        if cache_key in self.cache:
+            return self.cache[cache_key] * self.weight
+
         batch_size = len(prompt) if isinstance(prompt, list) else 1
 
         text_embeddings = self.compel(prompt)
@@ -106,6 +122,8 @@ class CompelPromptEncode(Flow):
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
             text_embeddings = torch.cat([uncond_embeddings, text_embeddings])
+
+        self.cache[cache_key] = text_embeddings
 
         return text_embeddings*self.weight
 

@@ -185,8 +185,6 @@ class MaskEncode(Flow):
     def apply(self, video: Video) -> Mask:
         logging.debug('MaskEncode apply %s', video)
 
-        video.onload()
-
         mask = video.chw()
 
         if self.width is None or self.height is None:
@@ -198,6 +196,7 @@ class MaskEncode(Flow):
                 mode='nearest-exact').squeeze()
 
         mask = (mask > self.threshold).to(torch.uint8)
+
         mask = mask.unsqueeze(0)
         mask = mask.unsqueeze(0)
         mask = mask.repeat(self.channels, 1, 1, 1, 1)

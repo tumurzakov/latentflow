@@ -102,7 +102,16 @@ class Prompt(Flow):
         return other
 
     def __str__(self):
-        return f'Prompt(+[{self.prompt}], -[{self.negative_prompt}]) {self.frames}'
+        prompt = ""
+
+        if self.prompts is not None:
+            for i,p in enumerate(self.prompts):
+                if p is not None:
+                        prompt = prompt + f'{i}: {p}\n'
+        else:
+            prompt = f'Prompt(\n+[{self.prompt}],\n-[{self.negative_prompt}]\n)'
+
+        return prompt
 
     def save(self, path):
         assert self.embeddings is not None, "Embeddings are empty"

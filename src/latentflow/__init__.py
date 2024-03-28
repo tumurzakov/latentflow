@@ -9,10 +9,12 @@ try:
     from latentflow.latent import Latent, LatentAdd, LatentSet, NoisePredict
     from latentflow.tile import Tile
     from latentflow.prompt import Prompt
+    from latentflow.prompt_embeddings import PromptEmbeddings
+    from latentflow.prompt_interpolate import PromptInterpolate
+    from latentflow.vae import Vae
     from latentflow.vae_video_encode import VaeVideoEncode
     from latentflow.vae_latent_decode import VaeLatentDecode
     from latentflow.unet import Unet, CFGPrepare, CFGProcess
-    from latentflow.prompt_embeddings import PromptEmbeddings
     from latentflow.a1111_prompt_encode import A1111PromptEncode
     from latentflow.compel_prompt_encode import CompelPromptEncode
     from latentflow.video_load import VideoLoad
@@ -24,7 +26,7 @@ try:
     from latentflow.debug import Debug, DebugHash, Info, Error, DebugCUDAUsage
     from latentflow.invert import Invert
     from latentflow.bypass import Bypass
-    from latentflow.lora import LoraOn, LoraOff, LoraMerge, LoraInitTrain
+    from latentflow.lora import LoraOn, LoraOff, LoraMerge, LoraInitUnetTrain
     from latentflow.apply import Apply, Call
     from latentflow.controlnet import ControlNet,ControlNetLatent
     from latentflow.loop import Loop
@@ -87,8 +89,8 @@ except Exception as e:
     logging.error("Error %s", str(e))
 
 try:
-    from latentflow.dataset import Dataset
-    from latentflow.train import TrainPredict, TrainCalcLoss, TrainStep
+    from latentflow.dataset import VideoDataset, PhotoDataset
+    from latentflow.train import Train, TrainConfig
 except Exception as e:
     logging.error("Error %s", str(e))
 
@@ -97,4 +99,11 @@ try:
     from latentflow.pipelines import TileRegionPipeline
 except Exception as e:
     logging.error("Error %s", str(e))
+
+
+try:
+    from latentflow.controlnet_processor import ControlNetProcessor
+except Exception as e:
+    logging.error("Error %s", str(e))
+
 

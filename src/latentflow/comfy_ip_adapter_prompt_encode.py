@@ -21,6 +21,8 @@ from .comfy_ip_adapter_plus import (
     InsightFaceLoader,
 )
 
+from .ip_adapter_attention_processor import MultiAttnProcessor
+
 if hasattr(torch.nn.functional, "scaled_dot_product_attention"):
     from .ip_adapter_attention_processor import IPAttnProcessor2_0 as IPAttnProcessor, AttnProcessor2_0 as AttnProcessor, CNAttnProcessor2_0 as CNAttnProcessor
 else:
@@ -58,7 +60,11 @@ class ComfyIPAdapterPromptEncode(Flow):
 
         self.model = None
 
-    def onload(self):
+        if self.pipe is not None:
+            self.load()
+            self.set_ip_adapter()
+
+    def load(self):
         if self.ip_adapter is None and self.ip_adapter_path is not None:
             self.ip_adapter = IPAdapterModelLoader().load_ipadapter_model(self.ip_adapter_path)[0]
 
@@ -94,29 +100,11 @@ class ComfyIPAdapterPromptEncode(Flow):
 
         self.tensor_cache = {}
 
-        #if self.pipe is not None:
-        #    self.set_ip_adapter()
+    def onload(self):
+        pass
 
     def offload(self):
-        del self.insightface
-        del self.ip_adapter_apply
-        del self.model
-        del self.ip_adapter
-        del self.clip_vision
-        del self.tensor_cache
-
-        gc.collect()
-        torch.cuda.empty_cache()
-
-        self.ip_adapter_apply = None
-        self.insightface = None
-        self.model = None
-        self.ip_adapter = None
-        self.clip_vision = None
-        self.tensor_cache = {}
-
-        cleanup_models()
-
+        pass
 
     def set_ip_adapter(self):
         unet = self.pipe.unet
@@ -137,7 +125,7 @@ class ComfyIPAdapterPromptEncode(Flow):
             if cross_attention_dim is None:
                 attn_procs[name] = AttnProcessor()
             else:
-                attn_procs[name] = IPAttnProcessor(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim).to(self.device, dtype=self.dtype)
+                attn_procs[name] = IPAttnProcessor(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim).to(unet.device, dtype=unet.dtype)
 
         unet.set_attn_processor(attn_procs)
 
@@ -175,24 +163,29 @@ class ComfyIPAdapterPromptEncode(Flow):
         prompt.onload()
         self.video.onload()
 
-
         if prompt.prompts is not None:
             self.tensor_cache = {}
 
+            last = None
             embeddings = []
             for i, p in enumerate(tqdm(prompt.prompts, desc='ip adapter')):
-                try:
-                    image = self.video.hwc()[0][i:i+1]/255.0
-                    h = tensor_hash(image)
-                    if h in self.tensor_cache:
-                        e = self.tensor_cache[h]
-                    else:
+                image = self.video.hwc()[0][i:i+1]/255.0
+                h = tensor_hash(image)
+                if h in self.tensor_cache:
+                    e = self.tensor_cache[h]
+                else:
+                    try:
                         e = self.encode(p.embeddings.embeddings, image)
-                        self.tensor_cache[h] = e
-                except:
-                    e = prompt.prompts[i-1].embeddings.embeddings
+                    except:
+                        e = last
 
-                p.embeddings = PromptEmbeddings(e)
+                    self.tensor_cache[h] = e
+
+                last = e
+
+                if p is not None:
+                    p.embeddings = PromptEmbeddings(e)
+
                 embeddings.append(e)
 
             length = len(prompt.prompts)

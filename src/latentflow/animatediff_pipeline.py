@@ -15,7 +15,7 @@ from omegaconf import OmegaConf
 
 from diffusers.models.attention_processor import AttnProcessor2_0
 import hashlib
-#from safetensors import safe_open
+from safetensors import safe_open
 
 from .flow import Flow
 from .latent import Latent
@@ -29,7 +29,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
     def load(cls,
             pretrained_model_path,
             motion_module_path,
-            #dreambooth_path=None,
+            dreambooth_path=None,
             unet_path=None,
             text_encoder_path=None,
             vae_path=None,
@@ -62,7 +62,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
             pretrained_model_path=pretrained_model_path,
             motion_module_path=motion_module_path,
             motion_module_config_path=motion_module_config_path,
-            #dreambooth_path=dreambooth_path,
+            dreambooth_path=dreambooth_path,
             text_encoder_path=text_encoder_path,
             unet_path=unet_path,
             vae_path=vae_path,
@@ -128,7 +128,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         pretrained_model_path,
         motion_module_path,
         motion_module_config_path=None,
-        #dreambooth_path=None,
+        dreambooth_path=None,
         text_encoder_path = None,
         unet_path = None,
         vae_path = None,
@@ -193,9 +193,6 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
 
         unet.set_attn_processor(AttnProcessor2_0())
 
-        #if is_xformers_available() and ('xformers' not in kwargs or kwargs['xformers']):
-        #    unet.enable_xformers_memory_efficient_attention()
-
         if scheduler_class_name is None:
             scheduler_class_name = 'DDIMScheduler'
 
@@ -227,8 +224,8 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
                 controlnet=controlnet if controlnet is not None and len(controlnet) > 0 else None,
                 )
 
-        #if dreambooth_path is not None:
-        #    pipeline = cls.load_dreambooth(pipeline, dreambooth_path)
+        if dreambooth_path is not None:
+            pipeline = cls.load_dreambooth(pipeline, dreambooth_path)
 
         pipeline.onload_device = onload_device
         pipeline.offload_device = offload_device
@@ -237,7 +234,14 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
             LoraOn(loras, pipeline, fuse=True).apply()
 
         logging.debug("AnimateDiffPipelineLoad motion_module %s", motion_module_path)
-        motion_module_state_dict = torch.load(motion_module_path, map_location="cpu")
+        if 'safetensors' in motion_module_path:
+            motion_module_state_dict = {}
+            with safe_open(motion_module_path, framework="pt", device="cpu") as f:
+                for k in f.keys():
+                    motion_module_state_dict[k] = f.get_tensor(k)
+        else:
+            motion_module_state_dict = torch.load(motion_module_path, map_location="cpu")
+
         if "global_step" in motion_module_state_dict:
             func_args.update({"global_step": motion_module_state_dict["global_step"]})
         missing, unexpected = pipeline.unet.load_state_dict(motion_module_state_dict, strict=False)
@@ -251,28 +255,28 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
 
         return pipeline
 
-    #@classmethod
-    #def load_dreambooth(cls, pipeline, dreambooth_path):
+    @classmethod
+    def load_dreambooth(cls, pipeline, dreambooth_path):
 
-    #    assert dreambooth_path.endswith(".safetensors"), 'dreambooth_path must end with safetensors'
+        assert dreambooth_path.endswith(".safetensors"), 'dreambooth_path must end with safetensors'
 
-    #    state_dict = {}
-    #    with safe_open(dreambooth_path, framework="pt", device="cpu") as f:
-    #        for key in f.keys():
-    #            state_dict[key] = f.get_tensor(key)
+        state_dict = {}
+        with safe_open(dreambooth_path, framework="pt", device="cpu") as f:
+            for key in f.keys():
+                state_dict[key] = f.get_tensor(key)
 
-    #    base_state_dict = state_dict
+        base_state_dict = state_dict
 
-    #    # vae
-    #    converted_vae_checkpoint = convert_ldm_vae_checkpoint(base_state_dict, pipeline.vae.config)
-    #    pipeline.vae.load_state_dict(converted_vae_checkpoint)
+        # vae
+        converted_vae_checkpoint = convert_ldm_vae_checkpoint(base_state_dict, pipeline.vae.config)
+        pipeline.vae.load_state_dict(converted_vae_checkpoint)
 
-    #    # unet
-    #    converted_unet_checkpoint = convert_ldm_unet_checkpoint(base_state_dict, pipeline.unet.config)
-    #    pipeline.unet.load_state_dict(converted_unet_checkpoint, strict=False)
+        # unet
+        converted_unet_checkpoint = convert_ldm_unet_checkpoint(base_state_dict, pipeline.unet.config)
+        pipeline.unet.load_state_dict(converted_unet_checkpoint, strict=False)
 
-    #    # text_model
-    #    pipeline.text_encoder = convert_ldm_clip_checkpoint(base_state_dict)
+        # text_model
+        pipeline.text_encoder = convert_ldm_clip_checkpoint(base_state_dict)
 
-    #    return pipeline
+        return pipeline
 

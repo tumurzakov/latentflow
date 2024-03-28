@@ -7,6 +7,7 @@ from safetensors.torch import save_file, safe_open
 
 from .flow import Flow
 from .unet import Unet
+from .train import Params
 
 class LoraOn(Flow):
     def __init__(self, loras: dict = {}, pipe=None, fuse=False):
@@ -67,10 +68,20 @@ class LoraOff(Flow):
 
         return other
 
-class LoraInitTrain(Flow):
-    def __init__(self, rank, unet=None):
+class LoraInitUnetTrain(Flow):
+    def __init__(self,
+            rank,
+            unet=None,
+            target_modules=[
+                "to_k",
+                "to_q",
+                "to_v",
+                "to_out.0",
+                ],
+            ):
         self.unet = unet
         self.rank = rank
+        self.target_modules = target_modules
 
     def apply(self, other):
         if isinstance(other, Unet):
@@ -80,13 +91,14 @@ class LoraInitTrain(Flow):
             r=self.rank,
             lora_alpha=self.rank,
             init_lora_weights="gaussian",
-            target_modules=["to_k", "to_q", "to_v", "to_out.0"],
+            target_modules=self.target_modules,
         )
 
         self.unet.add_adapter(unet_lora_config)
 
-        return other
+        lora_layers = list(filter(lambda p: p.requires_grad, self.unet.parameters()))
 
+        return Params(lora_layers)
 
 class LoraMerge(Flow):
     def __init__(self, loras, file):

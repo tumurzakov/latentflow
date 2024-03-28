@@ -49,6 +49,9 @@ class Pipeline(Flow):
         if hasattr(result, 'images'):
             result = result.images
 
+        if hasattr(result, 'frames'):
+            result = result.frames
+
         if self.callback is not None:
             result=self.callback(result)
 

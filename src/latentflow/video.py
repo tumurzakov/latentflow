@@ -72,7 +72,10 @@ class Video(Flow):
         assert len(path) == video.shape[0], "Path count must match batch size"
 
         for v, p in zip(video, path):
-            self.write_video_cv2(v, p, fps)
+            if p.endswith('.pth'):
+                torch.save(v, p)
+            else:
+                self.write_video_cv2(v, p, fps)
 
         return self
 
@@ -107,9 +110,6 @@ class Video(Flow):
         if frames.dtype == torch.float32 and torch.std(frames) < 2.0:
             frames = (frames * 255).to(torch.uint8)
 
-        frames = frames.detach().cpu().numpy()
-
-        frames = np.array(frames)
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         f, h, w, c = frames.shape
         frame_size = (w, h)
@@ -119,6 +119,7 @@ class Video(Flow):
 
         # Assuming you have a NumPy array of frames called 'frames'
         for frame in frames:
+            frame = frame.detach().cpu().numpy()
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             # Ensure the frame is in uint8 format

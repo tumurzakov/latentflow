@@ -65,14 +65,15 @@ class VaeLatentDecode(LatentDecode):
 
         video = []
         for frame_idx in tqdm(range(0, latents.shape[0], self.vae_batch)):
-            video.append(self.vae.decode(
+            frame = self.vae.decode(
                 latents[frame_idx:frame_idx+self.vae_batch],
                 **kwargs,
-                ).sample)
+                ).sample
+            video.append(frame.cpu())
 
-        video = torch.cat(video)
+        video = torch.cat(video).to('cuda')
         video = rearrange(video, "(b f) c h w -> b f h w c", f=video_length)
-        video = (video / 2 + 0.5).clamp(0, 1)
-        video = (video * 255).to(torch.uint8)
+        video.div_(2).add_(0.5).clamp_(0, 1)
+        video.mul_(255)
 
-        return video
+        return video.to(torch.uint8)

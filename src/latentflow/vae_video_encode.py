@@ -2,6 +2,7 @@ import os
 import torch
 from einops import rearrange
 import logging
+from tqdm import tqdm
 
 from diffusers import AutoencoderKL
 from diffusers.image_processor import VaeImageProcessor
@@ -73,7 +74,7 @@ class VaeVideoEncode(VideoEncode):
             latents = []
             for v in videos:
                 latent = []
-                for b in range(self.start_frame, self.video_length, self.vae_batch):
+                for b in tqdm(range(self.start_frame, self.video_length, self.vae_batch), desc='vae'):
                     latent.append(self.encode(v[b:b+self.vae_batch]))
                 latent = torch.cat(latent, dim=2)
                 latents.append(latent)

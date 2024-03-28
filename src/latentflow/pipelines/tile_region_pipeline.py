@@ -11,7 +11,12 @@ class IncrementPixelAuditByMask(Flow):
 
     def apply(self, other):
         tensor = self.state['pixel_infer_count'].tensor
-        tensor[self.tile] += torch.ones_like(tensor[self.tile]) * self.mask[self.tile].mask
+
+        ones = torch.ones_like(tensor[self.tile])
+        if self.mask is not None:
+            ones = ones * self.mask[self.tile].mask
+
+        tensor[self.tile] += ones
         self.state['pixel_infer_count'].tensor = tensor
         return other
 
@@ -25,7 +30,7 @@ class CalcBaseMask(Flow):
     def apply(self, region):
 
 
-        if self.region_index == 0:
+        if self.region_index == 0 and region.mask is not None:
             mask = Mask(torch.ones_like(region.mask.mask))
             for ri in range(len(self.regions)-1, 0, -1):
                 r = self.regions[ri]
@@ -127,7 +132,7 @@ class TileRegionPipeline(Flow):
 
                         (state | Loop(state['regions'], name="Region loop", callback=lambda region_index, region:
 
-                            (region|CalcBaseMask(region_index, timestep_index, state)) >> \
+                            (region | CalcBaseMask(region_index, timestep_index, state)) >> \
 
                             (state['tile_latent']
                                 | If(
@@ -140,17 +145,28 @@ class TileRegionPipeline(Flow):
                                             timestep=timestep,
                                             image=[x for x in state["tile_controlnet_video"].cnet().tensor],
                                             timesteps=state['timesteps'],
-                                            embeddings=region.prompt.embeddings.slice(tile[2]),
                                             controlnet_scale=region.controlnet_scale,
+                                            embeddings=region.prompt.embeddings.slice(tile[2]),
+                                            #embeddings=region.prompt.embeddings.slice(tile[2]) | AddTileEncoding(
+                                            #    tile=tile,
+                                            #    tokenizer=state['pipe'].tokenizer,
+                                            #    text_encoder=state['pipe'].text_encoder),
+
                                         ))
                                         | LoraOn(region.loras, pipe=state['pipe'])
                                         | state['unet'](
                                             timestep=timestep,
                                             embeddings=region.prompt.embeddings.slice(tile[2]),
+                                            #embeddings=region.prompt.embeddings.slice(tile[2]) | AddTileEncoding(
+                                            #    tile=tile,
+                                            #    tokenizer=state['pipe'].tokenizer,
+                                            #    text_encoder=state['pipe'].text_encoder),
+
                                         )
                                         | If(region.mask is not None, lambda x: x | region.mask[tile].cfg(guidance_scale=state['guidance_scale']).binarize())
                                         | LatentAdd(state['noise_predict'], tile)
                                         | IncrementPixelAuditByMask(state, tile, region.mask)
+                                        | LoraOff(pipe=state['pipe'])
                                 )
                             )
                             | Debug("Region loop end")

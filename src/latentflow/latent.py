@@ -42,7 +42,10 @@ class Latent(Flow):
         torch.save(self.latent, path)
         return self
 
-    def load(self, path):
+    def load(self, path=None):
+        if isinstance(self, str) and path is None:
+            path = self
+
         return Latent(torch.load(path))
 
     def clone(self):
