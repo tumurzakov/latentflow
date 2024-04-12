@@ -170,14 +170,14 @@ class PrecacheVideoDataset(VideoDataset):
             latents = cache['latents']
 
             # in case if we want to precache more frames then will use for train
-            if len(latents.shape) == 4:
-                latents = latents[:,:self.video_length,:,:]
+            if len(latents.shape) == 5:
+                latents = latents[:,:,:self.video_length,:,:]
 
             item['latents'] = latents
             item['embeddings'] = cache['embeddings']
 
         else:
-            pixel_values = item["pixel_values"].to(self.vae.dtype)
+            pixel_values = item["pixel_values"].to(self.vae.dtype).unsqueeze(0)
 
             if len(pixel_values.shape) == 5:
                 video_length = pixel_values.shape[1]
@@ -189,7 +189,7 @@ class PrecacheVideoDataset(VideoDataset):
 
             latents = latents * 0.18215
 
-            embeddings = self.text_encoder(torch.stack([item["prompt_ids"]]).to(self.text_encoder.device))[0]
+            embeddings = self.text_encoder(item["prompt_ids"].unsqueeze(0).to(self.text_encoder.device))[0]
 
             cache = {
                     'latents': latents,
