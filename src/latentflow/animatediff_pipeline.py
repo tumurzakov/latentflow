@@ -184,6 +184,8 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
                 logging.debug("AnimateDiffPipelineLoad vae %s", vae_path)
                 vae = AutoencoderKL.from_pretrained(vae_path)
 
+        vae = vae.to(dtype)
+
         logging.debug("AnimateDiffPipelineLoad unet %s", unet_path)
 
         unet = UNet3DConditionModel.from_pretrained_2d(

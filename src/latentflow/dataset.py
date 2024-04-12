@@ -1,9 +1,11 @@
 import os
+import sys
 import torch
 import logging
 import random
 import numpy as np
 from PIL import Image
+from tqdm import tqdm
 
 from .flow import Flow
 from .meta_utils import read_meta
@@ -26,6 +28,8 @@ class VideoDataset(torch.utils.data.Dataset):
             tile_width: int = -1,
             tile_height: int = -1,
             randomize: bool = True,
+            start_frame: int = 0,
+            end_frame: int = -1,
     ):
         self.samples_dir = samples_dir
         self.video_length = video_length
@@ -35,6 +39,8 @@ class VideoDataset(torch.utils.data.Dataset):
         self.tile_width = tile_width
         self.tile_height = tile_height
         self.randomize = randomize
+        self.start_frame = start_frame
+        self.end_frame = end_frame
 
         self.samples = []
 
@@ -63,9 +69,10 @@ class VideoDataset(torch.utils.data.Dataset):
         file_path, meta_path = self.samples[index]
         vr = decord.VideoReader(file_path, width=self.width, height=self.height)
 
-        start = 0
+        start = self.start_frame
         if self.randomize and len(vr) > self.video_length:
-            start = random.randint(0, len(vr) - self.video_length)
+            stop = len(vr) - self.video_length
+            start = random.randint(self.start_frame, max(stop, self.end_frame-self.video_length))
 
         sample_index = list(range(0, len(vr)))[start:start+self.video_length]
         video = vr.get_batch(sample_index)
@@ -105,6 +112,93 @@ class VideoDataset(torch.utils.data.Dataset):
         example["prompt_ids"] = self.tokenize(prompt)
 
         return example
+
+class PrecacheVideoDataset(VideoDataset):
+    def __init__(
+            self,
+            vae,
+            text_encoder,
+            cache_dir,
+            precache_count=0,
+            onload_device='cuda',
+            offload_device='cpu',
+            **kwargs
+    ):
+        self.vae = vae
+        self.text_encoder = text_encoder
+        self.cache_dir = cache_dir
+        self.onload_device = onload_device
+        self.offload_device = offload_device
+        self.index = 0
+        self.precache_count = precache_count
+        super().__init__(**kwargs)
+
+    def onload(self):
+        self.vae.to(self.onload_device)
+        self.text_encoder.to(self.onload_device)
+
+    def offload(self):
+        self.vae.to(self.offload_device)
+        self.text_encoder.to(self.offload_device)
+
+    def precache(self, count):
+        self.precache_count = count
+
+        self.onload()
+
+        self.index = 0
+        progress_bar = tqdm(total=count, desc=f'{self.cache_dir}')
+        while self.index < count:
+            for step, batch in enumerate(self):
+                progress_bar.update(1)
+                pass
+
+        self.index = 0
+
+        self.offload()
+
+    def __getitem__(self, index):
+        item = super().__getitem__(index)
+
+        index = self.index % self.precache_count
+        path = f'{self.cache_dir}/{index}.pth'
+        self.index += 1
+
+        if os.path.isfile(path):
+            cache = torch.load(path)
+
+            latents = cache['latents']
+
+            # in case if we want to precache more frames then will use for train
+            if len(latents.shape) == 4:
+                latents = latents[:,:self.video_length,:,:]
+
+            item['latents'] = latents
+            item['embeddings'] = cache['embeddings']
+
+        else:
+            pixel_values = item["pixel_values"].to(self.vae.dtype)
+
+            if len(pixel_values.shape) == 5:
+                video_length = pixel_values.shape[1]
+                pixel_values = rearrange(pixel_values, "b f c h w -> (b f) c h w")
+                latents = self.vae.encode(pixel_values.to(self.vae.device, dtype=self.vae.dtype)).latent_dist.sample()
+                latents = rearrange(latents, "(b f) c h w -> b c f h w", f=video_length)
+            else:
+                latents = self.vae.encode(pixel_values.to(self.vae.device, dtype=self.vae.dtype)).latent_dist.sample()
+
+            latents = latents * 0.18215
+
+            embeddings = self.text_encoder(torch.stack([item["prompt_ids"]]).to(self.text_encoder.device))[0]
+
+            cache = {
+                    'latents': latents,
+                    'embeddings': embeddings,
+                    }
+
+            torch.save(cache, path)
+
+        return item
 
 class PhotoDataset(torch.utils.data.Dataset):
     def __init__(

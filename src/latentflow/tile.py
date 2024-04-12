@@ -317,3 +317,55 @@ class AddTileEncoding(Flow):
         self.offload()
 
         return result
+
+class AddFrameEncoding(Flow):
+    def __init__(self,
+            frame,
+            tokenizer,
+            text_encoder,
+            onload_device='cuda',
+            offload_device='cpu'):
+
+        self.frame = frame
+        self.tokenizer = tokenizer
+        self.text_encoder = text_encoder
+        self.onload_device = onload_device
+        self.offload_device = offload_device
+
+    def onload(self):
+        self.text_encoder.to(self.onload_device)
+
+    def offload(self):
+        self.text_encoder.to(self.offload_device)
+
+    def apply(self, embeddings):
+        self.onload()
+        embeddings.onload()
+
+        embeds = embeddings.embeddings
+
+        uncond, cond = embeds.chunk(2)
+
+        prompt = f"frame{self.frame}"
+        prompt_ids = self.tokenizer(
+            prompt,
+            max_length=self.tokenizer.model_max_length,
+            padding="max_length",
+            truncation=True,
+            return_tensors="pt"
+        ).input_ids
+        frame_cond = self.text_encoder(prompt_ids.to(self.onload_device))[0]
+        video_length = cond.shape[0]
+        frame_cond = frame_cond.repeat(video_length, 1, 1)
+        frame_uncond = torch.zeros_like(frame_cond)
+
+        cond = torch.cat([cond, frame_cond], dim=1)
+        uncond = torch.cat([uncond, frame_uncond], dim=1)
+        embeds = torch.cat([uncond, cond])
+        result = PromptEmbeddings(embeds)
+
+        embeddings.offload()
+        result.offload()
+        self.offload()
+
+        return result

@@ -1,3 +1,4 @@
+import sys
 import logging
 
 try:
@@ -13,7 +14,7 @@ try:
     from latentflow.prompt_interpolate import PromptInterpolate
     from latentflow.vae import Vae
     from latentflow.vae_video_encode import VaeVideoEncode
-    from latentflow.vae_latent_decode import VaeLatentDecode
+    from latentflow.vae_latent_decode import VaeLatentDecode, VaeLatentDecodeSave
     from latentflow.unet import Unet, CFGPrepare, CFGProcess
     from latentflow.a1111_prompt_encode import A1111PromptEncode
     from latentflow.compel_prompt_encode import CompelPromptEncode
@@ -30,7 +31,7 @@ try:
     from latentflow.apply import Apply, Call
     from latentflow.controlnet import ControlNet,ControlNetLatent
     from latentflow.loop import Loop
-    from latentflow.tile import Tile, TileGenerator, UniformFrameTileGenerator, AddTileEncoding
+    from latentflow.tile import Tile, TileGenerator, UniformFrameTileGenerator, AddTileEncoding, AddFrameEncoding
     from latentflow.step import Step
     from latentflow.tensor import Tensor,TensorAdd
     from latentflow.mask import MaskEncode, Mask, LatentMaskCut, VideoMaskCut, LatentMaskMerge, LatentMaskCrop, MaskShow, MaskFlatten
@@ -49,61 +50,60 @@ try:
     from latentflow.sd_upscale import SDUpscale
     from latentflow.res_adapter import ResAdapter
 except Exception as e:
-    logging.error("Error %s", str(e))
+    logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 
 
 try:
     from latentflow.animatediff_pipeline import AnimateDiffPipeline
     from animatediff.pipelines.pipeline_animation import AnimationPipeline
 except Exception as e:
-    logging.error("Error %s", str(e))
+    logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 
 
 try:
     from latentflow.comfy_node import ComfyNode, ComfyResult
     from latentflow.comfy_ip_adapter_prompt_encode import ComfyIPAdapterPromptEncode
 except Exception as e:
-    logging.error("Error %s", str(e))
+    logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 
 
 try:
     from latentflow.video_face_crop import VideoFaceCrop
 except Exception as e:
-    logging.error("Error %s", str(e))
+    logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 
 
 try:
     from latentflow.video_rembg import VideoRembg
 except Exception as e:
-    logging.error("Error %s", str(e))
+    logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 
 try:
     from latentflow.esrgan import RESRGANUpscale
 except Exception as e:
-    logging.error("Error %s", str(e))
+    logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 
 
 try:
     from latentflow.sam import SegmentAnything, LoadSegmentAnything
 except Exception as e:
-    logging.error("Error %s", str(e))
+    logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 
 try:
-    from latentflow.dataset import VideoDataset, PhotoDataset
+    from latentflow.dataset import VideoDataset, PhotoDataset, PrecacheVideoDataset
     from latentflow.train import Train, TrainConfig
 except Exception as e:
-    logging.error("Error %s", str(e))
+    logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 
 
 try:
     from latentflow.pipelines import TileRegionPipeline
 except Exception as e:
-    logging.error("Error %s", str(e))
+    logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 
 
 try:
     from latentflow.controlnet_processor import ControlNetProcessor
 except Exception as e:
-    logging.error("Error %s", str(e))
-
+    logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 

@@ -146,7 +146,12 @@ class TileRegionPipeline(Flow):
                                             image=[x for x in state["tile_controlnet_video"].cnet().tensor],
                                             timesteps=state['timesteps'],
                                             controlnet_scale=region.controlnet_scale,
-                                            embeddings=region.prompt.embeddings.slice(tile[2]),
+                                            #embeddings=region.prompt.embeddings.slice(tile[2]),
+                                            embeddings=region.prompt.embeddings.slice(tile[2]) | AddFrameEncoding(
+                                                frame=tile[2][0],
+                                                tokenizer=state['pipe'].tokenizer,
+                                                text_encoder=state['pipe'].text_encoder,
+                                            ),
                                             #embeddings=region.prompt.embeddings.slice(tile[2]) | AddTileEncoding(
                                             #    tile=tile,
                                             #    tokenizer=state['pipe'].tokenizer,
@@ -189,10 +194,10 @@ class TileRegionPipeline(Flow):
         | Save(path=f'{self.samples_dir}/%datetime%/latent.pth')
         | Save(path=f'{self.samples_dir}/last/latent.pth')
         - LatentShow(fps=state['fps'], vae=state['pipe'].vae, vae_batch=state['vae_batch'])
-        | VaeLatentDecode(vae=state['pipe'].vae, vae_batch=state['vae_batch'])
-        | Save(path=f'{self.samples_dir}/%datetime%/video.mp4', fps=state['fps'])
-        | Save(path=f'{self.samples_dir}/last/video.mp4', fps=state['fps'])
-        | VideoShow(fps=state['fps'])
+        #| VaeLatentDecode(vae=state['pipe'].vae, vae_batch=state['vae_batch'])
+        #| Save(path=f'{self.samples_dir}/%datetime%/video.mp4', fps=state['fps'])
+        #| Save(path=f'{self.samples_dir}/last/video.mp4', fps=state['fps'])
+        #| VideoShow(fps=state['fps'])
         | Set(state, "video")
         )
 

@@ -1,6 +1,7 @@
 import torch
 import logging
 import math
+import sys
 
 from .flow import Flow
 from .meta_utils import read_meta
@@ -91,13 +92,9 @@ class Train(Flow):
 
     def onload(self):
         self.unet.to(self.onload_device)
-        self.onload_text_encoder()
-        self.onload_vae()
 
     def offload(self):
         self.unet.to(self.offload_device)
-        self.offload_text_encoder()
-        self.offload_vae()
 
     def onload_text_encoder(self):
         self.text_encoder.to(self.onload_device)
@@ -190,23 +187,28 @@ class Train(Flow):
             train_loss = 0.0
             for step, batch in enumerate(self.train_dataloader):
                 with accelerator.accumulate(self.unet):
-                    self.onload_vae()
 
-                    # Convert videos to latent space
-                    pixel_values = batch["pixel_values"].to(self.unet.dtype)
+                    if 'latents' in batch:
+                        latents = batch['latents']
 
-                    if len(pixel_values.shape) == 5:
-                        video_length = pixel_values.shape[1]
-                        pixel_values = rearrange(pixel_values, "b f c h w -> (b f) c h w")
-                        latents = self.vae.encode(pixel_values.to(self.vae.device)).latent_dist.sample()
-                        latents = rearrange(latents, "(b f) c h w -> b c f h w", f=video_length)
                     else:
-                        latents = self.vae.encode(pixel_values.to(self.vae.device)).latent_dist.sample()
+                        self.onload_vae()
 
-                    latents = latents * 0.18215
+                        # Convert videos to latent space
+                        pixel_values = batch["pixel_values"].to(self.unet.dtype)
 
-                    if self.do_offload_vae:
-                        self.offload_vae()
+                        if len(pixel_values.shape) == 5:
+                            video_length = pixel_values.shape[1]
+                            pixel_values = rearrange(pixel_values, "b f c h w -> (b f) c h w")
+                            latents = self.vae.encode(pixel_values.to(self.vae.device, dtype=self.vae.dtype)).latent_dist.sample()
+                            latents = rearrange(latents, "(b f) c h w -> b c f h w", f=video_length)
+                        else:
+                            latents = self.vae.encode(pixel_values.to(self.vae.device, dtype=self.vae.dtype)).latent_dist.sample()
+
+                        latents = latents * 0.18215
+
+                        if self.do_offload_vae:
+                            self.offload_vae()
 
                     # Sample noise that we'll add to the latents
                     noise = torch.randn_like(latents)
@@ -219,7 +221,6 @@ class Train(Flow):
                     # (this is the forward diffusion process)
                     noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps)
 
-                    self.onload_text_encoder()
 
                     # Get the text embedding for conditioning
                     if "embeddings" in batch:
@@ -230,15 +231,15 @@ class Train(Flow):
                             embeddings = embeddings[1:2,...]
                         encoder_hidden_states = embeddings
                     else:
+                        self.onload_text_encoder()
                         encoder_hidden_states = self.text_encoder(batch["prompt_ids"].to(self.text_encoder.device))[0]
 
-                    if "tile_encoding" in batch:
-                        tile_cond = self.text_encoder(batch["tile_encoding"].to(self.text_encoder.device))[0]
-                        cond = torch.cat([encoder_hidden_states, tile_cond], dim=1)
+                        if "tile_encoding" in batch:
+                            tile_cond = self.text_encoder(batch["tile_encoding"].to(self.text_encoder.device))[0]
+                            cond = torch.cat([encoder_hidden_states, tile_cond], dim=1)
 
-
-                    if self.do_offload_text_encoder:
-                        self.offload_text_encoder()
+                        if self.do_offload_text_encoder:
+                            self.offload_text_encoder()
 
                     # Get the target for loss depending on the prediction type
                     if self.noise_scheduler.prediction_type == "epsilon":

@@ -29,8 +29,8 @@ class Prompt(Flow):
             for x in range(max(frames)+1):
                 if x in self.frames:
                     self.prompts[x] = Prompt(
-                            prompt=self.prompt,
-                            negative_prompt=self.negative_prompt,
+                            prompt=self.prompt if self.prompt is not None else "",
+                            negative_prompt=self.negative_prompt if self.negative_prompt is not None else "",
                             image=self.image[:, x:x+1] if self.image is not None else None,
                             negative_image=self.negative_image[:, x:x+1] if self.negative_image is not None else None,
                             embeddings=self.embeddings,

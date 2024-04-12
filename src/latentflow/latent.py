@@ -99,6 +99,9 @@ class Latent(Flow):
     def __getitem__(self, key):
         return Latent(self.latent[key])
 
+    def __len__(self):
+        return self.latent.shape[2]
+
 
 class NoisePredict(Latent):
     def __str__(self):
