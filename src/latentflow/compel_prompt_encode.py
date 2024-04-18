@@ -27,6 +27,7 @@ class CompelPromptEncode(Flow):
         self.onload_device = onload_device
         self.offload_device = offload_device
         self.clip_skip = clip_skip
+        self.cache = {}
 
         logging.debug("CompelPromptEncode init")
 
@@ -63,17 +64,24 @@ class CompelPromptEncode(Flow):
 
             embeddings = []
             for i, p in enumerate(tqdm(prompt.prompts)):
+                e = None
                 if p is not None:
-                    e = self.encode(
-                            prompt=p.prompt,
-                            negative_prompt=p.negative_prompt,
-                            )
-                    p.embeddings = PromptEmbeddings(e)
+                    if p.embeddings is None:
+                        e = self.encode(
+                                prompt=p.prompt,
+                                negative_prompt=p.negative_prompt,
+                                )
+                        p.embeddings = PromptEmbeddings(e)
+
+                    else:
+                        e = p.embeddings.embeddings
+
                     last = p
                 else:
                     assert last is not None, "Last embedding must exist"
                     e = last.embeddings.embeddings
 
+                assert e is not None, 'Embeddings must exist'
                 embeddings.append(e)
 
             length = len(prompt.prompts)

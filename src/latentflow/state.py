@@ -75,3 +75,13 @@ class State(Flow):
 
 
 class Context(State): ...
+
+class Free(Flow):
+    def __init__(self, state, key):
+        self.state = state
+        self.key = key
+
+    def apply(self, other):
+        self.state[self.key] = None
+        gc.collect()
+        return other

@@ -131,7 +131,7 @@ class Mask(Flow):
 
         return Mask(mask, origin=self, origin_tile=tile)
 
-    def shrink(self):
+    def shrink(self, padding=0):
         mask = self.mask
         if self.mode != 'b f c h w':
             mask = rearrange(mask, f'{self.mode} -> b f c h w')
@@ -142,7 +142,7 @@ class Mask(Flow):
         mask = mask.to(torch.uint8)
 
         chan = mask[0][0][0]
-        chan = chan.detach().numpy()
+        chan = chan.detach().cpu().numpy()
         contours, _ = cv2.findContours(chan, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         shape = self.mask.shape
@@ -157,10 +157,15 @@ class Mask(Flow):
         origin = None
         origin_tile = tile
         if contours:
-            x, y, w, h = cv2.boundingRect(contours[0])
+            merged_contour = contours[0]
+            for contour in contours[1:]:
+                merged_contour = np.concatenate((merged_contour, contour))
+
+            x, y, w, h = cv2.boundingRect(merged_contour)
+
             dims = self.mode.split(' ')
-            tile[dims.index('h')] = slice(y, y+h)
-            tile[dims.index('w')] = slice(x, x+w)
+            tile[dims.index('h')] = slice(y-padding, y+h+padding)
+            tile[dims.index('w')] = slice(x-padding, x+w+padding)
             origin = self
             origin_tile = tile
 

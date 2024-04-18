@@ -167,7 +167,7 @@ class PrecacheVideoDataset(VideoDataset):
         if os.path.isfile(path):
             cache = torch.load(path)
 
-            latents = cache['latents']
+            latents = cache['latents'][0]
 
             # in case if we want to precache more frames then will use for train
             if len(latents.shape) == 5:

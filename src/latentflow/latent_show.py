@@ -15,6 +15,7 @@ class LatentShow(Flow):
             callback=None,
             onload_device='cuda',
             offload_device='cpu',
+            progress_bar=True,
             ):
         self.fps = fps
         self.vae = vae
@@ -22,6 +23,7 @@ class LatentShow(Flow):
         self.callback = callback
         self.onload_device = onload_device
         self.offload_device = offload_device
+        self.progress_bar = progress_bar
 
         logging.debug("LatentShow init %s %s",
                 fps, vae_batch)
@@ -38,7 +40,7 @@ class LatentShow(Flow):
         self.onload()
         latent.onload()
 
-        self.vae_decode = VaeLatentDecode(vae=self.vae, vae_batch=self.vae_batch)
+        self.vae_decode = VaeLatentDecode(vae=self.vae, vae_batch=self.vae_batch, progress_bar=self.progress_bar)
         self.video_show = VideoShow(fps=self.fps)
 
         l = latent

@@ -171,6 +171,7 @@ class ComfyIPAdapterPromptEncode(Flow):
             for i, p in enumerate(tqdm(prompt.prompts, desc='ip adapter')):
                 image = self.video.hwc()[0][i:i+1]/255.0
                 h = tensor_hash(image)
+
                 if h in self.tensor_cache:
                     e = self.tensor_cache[h]
                 else:

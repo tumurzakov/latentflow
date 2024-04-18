@@ -24,9 +24,12 @@ class Prompt(Flow):
         self.prompts = prompts
         self.embeddings = embeddings
 
-        if prompts is None and frames is not None:
-            self.prompts = [None for x in range(max(frames)+1)]
-            for x in range(max(frames)+1):
+        self.init_frames()
+
+    def init_frames(self):
+        if self.prompts is None and self.frames is not None:
+            self.prompts = [None for x in range(max(self.frames)+1)]
+            for x in range(max(self.frames)+1):
                 if x in self.frames:
                     self.prompts[x] = Prompt(
                             prompt=self.prompt if self.prompt is not None else "",
@@ -107,7 +110,7 @@ class Prompt(Flow):
         if self.prompts is not None:
             for i,p in enumerate(self.prompts):
                 if p is not None:
-                        prompt = prompt + f'{i}: {p}\n'
+                    prompt = prompt + f'{i}: {p}\n'
         else:
             prompt = f'Prompt(\n+[{self.prompt}],\n-[{self.negative_prompt}]\n)'
 
@@ -121,3 +124,12 @@ class Prompt(Flow):
     def load(self, path):
         self.embeddings = PromptEmbeddings().load(path)
         return self
+
+class PromptSetFrames(Flow):
+    def __init__(self, frames):
+        self.frames = frames
+
+    def apply(self, prompt):
+        prompt.frames = self.frames
+        prompt.init_frames()
+        return prompt

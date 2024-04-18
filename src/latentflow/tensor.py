@@ -34,7 +34,7 @@ class Tensor(Flow):
         return Tensor(self.tensor[key])
 
     def __str__(self):
-        return f'Tensor({self.tensor.shape})'
+        return f'Tensor({self.tensor.shape}, {self.tensor.device}, {self.tensor.dtype})'
 
 class TensorAdd(Flow):
     def __init__(self, tensor: torch.Tensor):

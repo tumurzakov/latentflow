@@ -2,6 +2,7 @@ import torch
 from einops import rearrange
 from typing import List, Optional, Tuple, Union, Generator
 import torch.nn.functional as F
+from tqdm import tqdm
 from .flow import Flow
 from .tensor import Tensor
 
@@ -95,6 +96,25 @@ class Video(Flow):
                 )
         v = rearrange(v, 'b c f h w -> b f c h w')
         return Video('CHW', video=v.to(torch.uint8))
+
+    def rescale(self, scale):
+        input_size = self.size()
+        output_size = (int(input_size[1] * scale), int(input_size[0] * scale))
+
+        batches = []
+        for b in self.hwc():
+            frames = []
+            for f in b:
+                frame = cv2.resize(f.detach().cpu().numpy(), output_size, interpolation=cv2.INTER_LANCZOS4)
+                frames.append(torch.tensor(frame))
+
+            frames = torch.stack(frames)
+            batches.append(frames)
+
+        batches = torch.stack(batches)
+
+        return Video('HWC', batches)
+
 
     def chw(self):
         return rearrange(self.video, 'b f h w c -> b f c h w')

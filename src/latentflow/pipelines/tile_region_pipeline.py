@@ -14,7 +14,7 @@ class IncrementPixelAuditByMask(Flow):
 
         ones = torch.ones_like(tensor[self.tile])
         if self.mask is not None:
-            ones = ones * self.mask[self.tile].mask
+            ones = ones * self.mask[self.tile].mask.to(ones.device)
 
         tensor[self.tile] += ones
         self.state['pixel_infer_count'].tensor = tensor
@@ -92,8 +92,6 @@ class TileRegionPipeline(Flow):
             | If(state['strength'] is not None, lambda x: x
                 | AddNoise(scheduler=state['pipe'].scheduler, timesteps=state['timesteps'])
                 )
-
-            - LatentShow(fps=state['fps'], vae=state['pipe'].vae)
             | Loop(state['timesteps'], name="Denoise loop", progress_bar=True, callback=lambda timestep_index, timestep:
                 (Latent(torch.zeros_like(state['latent'].latent).repeat(2,1,1,1,1)) > state('noise_predict')) >> \
 
@@ -140,18 +138,24 @@ class TileRegionPipeline(Flow):
                                     timestep_index < (region.stop_timestep if region.stop_timestep is not None else len(state['timesteps'])),
                                     lambda x: x
                                         | CFGPrepare(guidance_scale=state['guidance_scale'])
+                                        | Set(state, 'tile_latent_cfg')
+                                        | If(region.mask is not None, lambda x: x | LatentShrink(region.mask[tile].cfg(guidance_scale=state['guidance_scale']), padding=2))
+                                        #| If(region.scale is not None, lambda x: x | Resize(scale_factor=region.scale))
                                         | If(state['cnet'] is not None, lambda x: x | state['cnet'](
                                             timestep_index=timestep_index,
                                             timestep=timestep,
-                                            image=[x for x in state["tile_controlnet_video"].cnet().tensor],
+                                            image=[x for x in (state["tile_controlnet_video"]
+                                                | If(region.mask is not None, lambda v: v | VideoShrink(region.mask[tile].cfg(guidance_scale=state['guidance_scale']), padding=16))
+                                                #| If(region.scale is not None, lambda v: v | Resize(scale_factor=region.scale))
+                                                ).cnet().tensor],
                                             timesteps=state['timesteps'],
                                             controlnet_scale=region.controlnet_scale,
-                                            #embeddings=region.prompt.embeddings.slice(tile[2]),
-                                            embeddings=region.prompt.embeddings.slice(tile[2]) | AddFrameEncoding(
-                                                frame=tile[2][0],
-                                                tokenizer=state['pipe'].tokenizer,
-                                                text_encoder=state['pipe'].text_encoder,
-                                            ),
+                                            embeddings=region.prompt.embeddings.slice(tile[2]),
+                                            #embeddings=region.prompt.embeddings.slice(tile[2]) | AddFrameEncoding(
+                                            #    frame=tile[2][0],
+                                            #    tokenizer=state['pipe'].tokenizer,
+                                            #    text_encoder=state['pipe'].text_encoder,
+                                            #),
                                             #embeddings=region.prompt.embeddings.slice(tile[2]) | AddTileEncoding(
                                             #    tile=tile,
                                             #    tokenizer=state['pipe'].tokenizer,
@@ -162,12 +166,19 @@ class TileRegionPipeline(Flow):
                                         | state['unet'](
                                             timestep=timestep,
                                             embeddings=region.prompt.embeddings.slice(tile[2]),
+                                            #embeddings=region.prompt.embeddings.slice(tile[2]) | AddFrameEncoding(
+                                            #    frame=tile[2][0],
+                                            #    tokenizer=state['pipe'].tokenizer,
+                                            #    text_encoder=state['pipe'].text_encoder,
+                                            #),
                                             #embeddings=region.prompt.embeddings.slice(tile[2]) | AddTileEncoding(
                                             #    tile=tile,
                                             #    tokenizer=state['pipe'].tokenizer,
                                             #    text_encoder=state['pipe'].text_encoder),
 
                                         )
+                                        #| If(region.scale is not None, lambda x: x | Resize(scale_factor=1/region.scale))
+                                        | If(region.mask is not None, lambda x: x | LatentUnshrink(state['tile_latent_cfg'], region.mask[tile].cfg(guidance_scale=state['guidance_scale']), padding=2))
                                         | If(region.mask is not None, lambda x: x | region.mask[tile].cfg(guidance_scale=state['guidance_scale']).binarize())
                                         | LatentAdd(state['noise_predict'], tile)
                                         | IncrementPixelAuditByMask(state, tile, region.mask)
@@ -193,7 +204,7 @@ class TileRegionPipeline(Flow):
         )
         | Save(path=f'{self.samples_dir}/%datetime%/latent.pth')
         | Save(path=f'{self.samples_dir}/last/latent.pth')
-        - LatentShow(fps=state['fps'], vae=state['pipe'].vae, vae_batch=state['vae_batch'])
+        #| LatentShow(fps=state['fps'], vae=state['pipe'].vae, vae_batch=state['vae_batch'])
         #| VaeLatentDecode(vae=state['pipe'].vae, vae_batch=state['vae_batch'])
         #| Save(path=f'{self.samples_dir}/%datetime%/video.mp4', fps=state['fps'])
         #| Save(path=f'{self.samples_dir}/last/video.mp4', fps=state['fps'])

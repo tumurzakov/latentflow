@@ -3,13 +3,12 @@ import logging
 
 try:
     from latentflow.flow import Flow
-    from latentflow.state import State
-    from latentflow.state import Context
+    from latentflow.state import State, Context, Free
     from latentflow.seed import Seed
     from latentflow.video import Video, VideoAdd
     from latentflow.latent import Latent, LatentAdd, LatentSet, NoisePredict
     from latentflow.tile import Tile
-    from latentflow.prompt import Prompt
+    from latentflow.prompt import Prompt, PromptSetFrames
     from latentflow.prompt_embeddings import PromptEmbeddings
     from latentflow.prompt_interpolate import PromptInterpolate
     from latentflow.vae import Vae
@@ -37,7 +36,7 @@ try:
     from latentflow.mask import MaskEncode, Mask, LatentMaskCut, VideoMaskCut, LatentMaskMerge, LatentMaskCrop, MaskShow, MaskFlatten
     from latentflow.region import Region
     from latentflow.noop import Noop
-    from latentflow.interpolate import Interpolate
+    from latentflow.interpolate import Interpolate, Resize
     from latentflow.flow import If, Set, Switch
     from latentflow.nn_latent_upscale import NNLatentUpscale
     from latentflow.slice_utils import slice_scale
@@ -49,6 +48,7 @@ try:
     from latentflow.pipeline import Pipeline
     from latentflow.sd_upscale import SDUpscale
     from latentflow.res_adapter import ResAdapter
+    from latentflow.shrink import LatentShrink, LatentUnshrink, VideoShrink
 except Exception as e:
     logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 
