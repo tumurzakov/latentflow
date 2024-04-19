@@ -171,7 +171,7 @@ class LatentSet(Flow):
 
         if self.mask is not None:
             if self.key is not None:
-                s[self.key] = s[self.key] * self.mask.invert()[self.key].binarize().mask
+                s[self.key] = s[self.key] * self.mask.invert()[self.key].mask
                 l = l * self.mask[self.key].mask
             else:
                 s = s * self.mask.invert().mask

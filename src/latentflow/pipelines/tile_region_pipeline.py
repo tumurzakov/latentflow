@@ -179,7 +179,7 @@ class TileRegionPipeline(Flow):
                                         )
                                         #| If(region.scale is not None, lambda x: x | Resize(scale_factor=1/region.scale))
                                         | If(region.mask is not None, lambda x: x | LatentUnshrink(state['tile_latent_cfg'], region.mask[tile].cfg(guidance_scale=state['guidance_scale']), padding=2))
-                                        | If(region.mask is not None, lambda x: x | region.mask[tile].cfg(guidance_scale=state['guidance_scale']).binarize())
+                                        | If(region.mask is not None, lambda x: x | region.mask[tile].cfg(guidance_scale=state['guidance_scale']))
                                         | LatentAdd(state['noise_predict'], tile)
                                         | IncrementPixelAuditByMask(state, tile, region.mask)
                                         | LoraOff(pipe=state['pipe'])

@@ -467,3 +467,69 @@ class MaskFlatten(Flow):
     def apply(self, other):
         assert isinstance(other, Mask)
         return Mask(other.mask.flatten())
+
+class MaskGrow(Flow):
+
+    def __init__(self,
+            transparent=1.0,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            ):
+        self.transparent = transparent
+        self.kernel_size=kernel_size
+        self.stride = stride
+        self.padding = padding
+
+    def apply(self, mask):
+        shape = mask.mask.shape
+        m = mask.mask.clone().to(torch.float)
+        diffs = torch.zeros_like(m)
+        for f in range(shape[2]):
+            frame = m[:,:,f,:,:]
+            pool = F.max_pool2d(frame,
+                    kernel_size=self.kernel_size,
+                    stride=self.stride,
+                    padding=self.padding)
+            diff =  pool - frame
+            m[:,:,f,:,:] += diff*self.transparent
+
+            diffs[:,:,f,:,:] += diff
+
+        return Mask(m.clamp(0,1))
+
+class MaskBlur(Flow):
+    def apply(self, mask):
+
+        conv = nn.Conv2d(1, 1, kernel_size=3, padding=1, bias=False)
+        blur_kernel = torch.tensor([[1, 2, 1],
+                                    [2, 4, 2],
+                                    [1, 2, 1]], dtype=torch.float32) / 16.0
+        blur_kernel = blur_kernel.view(1, 1, 3, 3)  # Reshape to match the shape of the convolutional kernel
+        conv.weight.data.copy_(blur_kernel)
+
+        shape = mask.mask.shape
+        m = mask.mask.clone().to(torch.float)
+        for f in range(shape[2]):
+            m[:,:,f,...] = conv(m[:,:,f,...])
+
+        return Mask(m.clamp(0,1))
+
+
+class MaskMergeWithSlidingWindow(Flow):
+    def __init__(self, window):
+        self.window = window
+
+    def apply(self, mask):
+        # b c f h w
+
+        shape = mask.mask.shape
+        window = self.window
+
+        m = mask.mask.clone().to(torch.float)
+        for f in range(shape[2]-1, window-1, -1):
+            for i in range(window):
+                m[:,:,f,:,:] += m[:,:,f-i,:,:]
+
+        return Mask(m.clamp(0,1))
+

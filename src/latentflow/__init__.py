@@ -33,7 +33,6 @@ try:
     from latentflow.tile import Tile, TileGenerator, UniformFrameTileGenerator, AddTileEncoding, AddFrameEncoding
     from latentflow.step import Step
     from latentflow.tensor import Tensor,TensorAdd
-    from latentflow.mask import MaskEncode, Mask, LatentMaskCut, VideoMaskCut, LatentMaskMerge, LatentMaskCrop, MaskShow, MaskFlatten
     from latentflow.region import Region
     from latentflow.noop import Noop
     from latentflow.interpolate import Interpolate, Resize
@@ -49,6 +48,21 @@ try:
     from latentflow.sd_upscale import SDUpscale
     from latentflow.res_adapter import ResAdapter
     from latentflow.shrink import LatentShrink, LatentUnshrink, VideoShrink
+
+    from latentflow.mask import (
+            MaskEncode,
+            Mask,
+            LatentMaskCut,
+            VideoMaskCut,
+            LatentMaskMerge,
+            LatentMaskCrop,
+            MaskShow,
+            MaskFlatten,
+            MaskGrow,
+            MaskBlur,
+            MaskMergeWithSlidingWindow,
+            )
+
 except Exception as e:
     logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 
