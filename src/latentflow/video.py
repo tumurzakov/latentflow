@@ -1,3 +1,4 @@
+import os
 import torch
 from einops import rearrange
 from typing import List, Optional, Tuple, Union, Generator
@@ -63,7 +64,7 @@ class Video(Flow):
     def size(self):
         return (self.video.shape[2], self.video.shape[3])
 
-    def save(self, path, fps):
+    def save(self, path, fps, start_frame=0):
         video = self.hwc()
         assert len(video.shape) == 5, "Must have 5 dims"
 
@@ -73,7 +74,9 @@ class Video(Flow):
         assert len(path) == video.shape[0], "Path count must match batch size"
 
         for v, p in zip(video, path):
-            if p.endswith('.pth'):
+            if '%' in path:
+                self.write_images(v, p, start_frame)
+            elif p.endswith('.pth'):
                 torch.save(v, p)
             else:
                 self.write_video_cv2(v, p, fps)
@@ -124,6 +127,16 @@ class Video(Flow):
 
     def cnet(self):
         return Tensor(self.chw().float()/255.0)
+
+    def write_images(self, frames, output_path, start_frame = 0):
+        dirname = os.path.dirname(output_path)
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname, exist_ok=True)
+
+        for i, frame in enumerate(frames):
+            frame_number = start_frame + i
+            img = Image.fromarray(frame.detach().cpu().numpy())
+            img.save(output_path % frame_number)
 
     def write_video_cv2(self, frames, output_path, fps):
 

@@ -33,6 +33,9 @@ class LatentUnshrink(Flow):
         unshrink_latent = torch.zeros_like(self.latent.latent)
         latent_tile = shrink_mask.origin_tile
         latent_tile[1] = slice(0,4)
+        #TODO: there is displacement on +1 pixel by x and y somewhere in rounding
+        latent_tile[3] = slice(latent_tile[3].start-1, latent_tile[3].stop-1)
+        latent_tile[4] = slice(latent_tile[4].start-1, latent_tile[4].stop-1)
         unshrink_latent[latent_tile] = latent.latent
         unshrink_latent = type(latent)(unshrink_latent)
 

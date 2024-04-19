@@ -1,9 +1,11 @@
+import os
 import torch
 import logging
 from einops import rearrange
 import gc
 import cv2
 import numpy as np
+from PIL import Image
 
 from diffusers import AutoencoderKL, AutoencoderKLTemporalDecoder
 from diffusers.image_processor import VaeImageProcessor
@@ -111,6 +113,7 @@ class VaeLatentDecodeSave(VaeLatentDecode):
             save_batch_size=100,
             save_chunk_size=100,
             save_fps=16,
+            start_frame=0,
             onload_device='cuda',
             offload_device='cpu',
             ):
@@ -127,10 +130,42 @@ class VaeLatentDecodeSave(VaeLatentDecode):
         self.save_batch_size = save_batch_size
         self.save_chunk_size = save_chunk_size
         self.save_fps = save_fps
+        self.start_frame = start_frame
 
     def apply(self, latent: Latent) -> Latent:
         self.onload()
 
+        dirname = os.path.dirname(self.save_path)
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname, exist_ok=True)
+
+        if '%' in self.save_path:
+            self.save_images(latent)
+        else:
+            self.save_video(latent)
+
+        self.offload()
+
+        return latent
+
+    def save_images(self, latent):
+        latents = latent.latent
+
+        b = latents.shape[0]
+        l = latents.shape[2]
+
+        for batch_idx in range(b):
+            for frame_idx in tqdm(range(0, l, self.save_batch_size)):
+                ll = latents[batch_idx:batch_idx+1, :, frame_idx:frame_idx+self.save_batch_size, :, :]
+                video = self.decode(ll.to(self.onload_device), chunk_size=self.save_chunk_size)
+                for decode_idx, f in enumerate(video[0]):
+                    frame_number = self.start_frame + frame_idx + decode_idx
+                    frame = f.detach().cpu().numpy()
+                    img = Image.fromarray(frame)
+                    output_path = self.save_path % frame_number
+                    img.save(output_path)
+
+    def save_video(self, latent):
         latents = latent.latent
 
         b = latents.shape[0]
@@ -157,7 +192,3 @@ class VaeLatentDecodeSave(VaeLatentDecode):
                     out.write(frame)
 
         out.release()
-
-        self.offload()
-
-        return latent

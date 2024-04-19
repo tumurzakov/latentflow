@@ -1,3 +1,4 @@
+import os
 import logging
 import torch
 from typing import List, Optional, Tuple, Union, Generator
@@ -38,8 +39,13 @@ class Latent(Flow):
     def offload(self):
         self.latent = self.latent.to(self.offload_device)
 
-    def save(self, path):
-        torch.save(self.latent, path)
+    def save(self, output_path):
+        dirname = os.path.dirname(output_path)
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname, exist_ok=True)
+
+        torch.save(self.latent, output_path)
+
         return self
 
     def load(self, path=None):
