@@ -6,7 +6,6 @@ import numpy as np
 from einops import rearrange
 
 import logging
-logging.basicConfig(level=logging.INFO)
 from tqdm import tqdm
 
 from .flow import Flow

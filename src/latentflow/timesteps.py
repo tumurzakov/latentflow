@@ -35,6 +35,9 @@ class Timesteps(Flow):
     def __str__(self):
         return f'Timesteps({len(self)})'
 
+    def __getitem__(self, key):
+        return self.timesteps[key]
+
     def __iter__(self):
         self._index = 0
         return self

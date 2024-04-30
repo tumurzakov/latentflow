@@ -29,11 +29,13 @@ class Flow:
         return other
 
 class If(Flow):
-    def __init__(self, condition, callback):
+    def __init__(self, condition, callback, desc=""):
         self.condition = condition
         self.callback = callback
+        self.desc = desc
 
     def apply(self, other):
+        logging.debug("If %s %s", self.condition, self.desc)
         if self.condition:
             return self.callback(other)
         else:

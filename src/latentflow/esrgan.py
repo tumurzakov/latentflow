@@ -17,6 +17,7 @@ class RESRGANUpscale(Flow):
         self.scale = scale
 
     def apply(self, other: Video) -> Video:
+        logging.debug("RESRGANUpscale apply %s %s %s", other, self.scale, self.model_path)
 
         other.onload()
 

@@ -21,10 +21,11 @@ class LatentShrink(Flow):
         return shrink_latent
 
 class LatentUnshrink(Flow):
-    def __init__(self, latent, mask, padding):
+    def __init__(self, latent, mask, padding, displace=False):
         self.mask = mask
         self.latent = latent
         self.padding = padding
+        self.displace = displace
 
     def apply(self, latent):
         shrink_mask = self.mask.shrink(self.padding)
@@ -33,9 +34,15 @@ class LatentUnshrink(Flow):
         unshrink_latent = torch.zeros_like(self.latent.latent)
         latent_tile = shrink_mask.origin_tile
         latent_tile[1] = slice(0,4)
-        #TODO: there is displacement on +1 pixel by x and y somewhere in rounding
-        latent_tile[3] = slice(latent_tile[3].start-1, latent_tile[3].stop-1)
-        latent_tile[4] = slice(latent_tile[4].start-1, latent_tile[4].stop-1)
+
+        latent_tile[3] = slice(latent_tile[3].start, latent_tile[3].start+latent.latent.shape[3])
+        latent_tile[4] = slice(latent_tile[4].start, latent_tile[4].start+latent.latent.shape[4])
+
+        if self.displace:
+            #TODO: there is displacement on +1 pixel by x and y somewhere in rounding
+            latent_tile[3] = slice(latent_tile[3].start-1, latent_tile[3].start-1+latent.latent.shape[3])
+            latent_tile[4] = slice(latent_tile[4].start-1, latent_tile[4].start-1+latent.latent.shape[4])
+
         unshrink_latent[latent_tile] = latent.latent
         unshrink_latent = type(latent)(unshrink_latent)
 

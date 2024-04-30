@@ -189,7 +189,7 @@ class TileGenerator(Flow):
     def __next__(self):
         if self._index < len(self.tiles):
             tile = self.tiles[self._index]
-            logging.debug("UniformFrameGenerator next %s %s", self._index, tile)
+            logging.debug("TileGenerator next %s %s", self._index, tile)
             self._index += 1
 
             return tile

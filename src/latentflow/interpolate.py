@@ -25,10 +25,16 @@ class Interpolate(Flow):
         self.recompute_scale_factor = recompute_scale_factor
         self.antialias = antialias
 
-    def apply(self, tensor: Tensor) -> Tensor:
+    def apply(self, tensor) -> Tensor:
         tensor.onload()
 
-        t = tensor.tensor
+        if isinstance(tensor, Tensor):
+            t = tensor.tensor
+        elif isinstance(tensor, Latent):
+            t = tensor.latent
+        elif isinstance(tensor, Video):
+            t = tensor.hwc()
+
         t = F.interpolate(
                 t,
                 scale_factor = self.scale_factor,
@@ -39,7 +45,10 @@ class Interpolate(Flow):
                 antialias=self.antialias,
                 )
 
-        result = Tensor(t)
+        if isinstance(tensor, Video):
+            result = Video('HWC', t)
+        else:
+            result = type(tensor)(t)
 
         del tensor
         result.offload()
