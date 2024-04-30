@@ -37,7 +37,11 @@ class If(Flow):
     def apply(self, other):
         logging.debug("If %s %s", self.condition, self.desc)
         if self.condition:
-            return self.callback(other)
+            try:
+                return self.callback(other)
+            except Exception as e:
+                logging.error("If error %s", e)
+                return other
         else:
             return other
 

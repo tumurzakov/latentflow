@@ -98,7 +98,7 @@ class DoubleShedPipeline(Flow):
             | If(state['strength'] is not None, lambda x: x
                 | AddNoise(scheduler=state['pipe'].scheduler, timesteps=state['timesteps1'])
                 )
-            | Loop(state['timesteps1'], name="Denoise loop", progress_bar=True, callback=lambda timestep_index, timestep:
+            | Loop(state['timesteps1'], name="Denoise loop", progress_bar=state['video_length'] < 500, callback=lambda timestep_index, timestep:
                 (Latent(torch.zeros_like(state['latent'].latent).repeat(2,1,1,1,1)) > state('noise_predict')) >> \
 
                 (Tensor(torch.zeros_like(state['latent'].latent)) > state('pixel_infer_count')) >> \
@@ -117,12 +117,12 @@ class DoubleShedPipeline(Flow):
                         ),
                     state['latent'],
                     do_classifier_free_guidance=True,
-                    #pixel_infer_count=state['pixel_infer_count'],
                     ) | Set(state, 'tile_generator')) >> \
 
                 (state | Loop(
                     state['tile_generator'],
-                    name="Tile loop",
+                    name=f"Tile loop {timestep_index+1}/{len(state['timesteps1'])}",
+                    progress_bar=state['video_length'] >= 500,
                     callback=lambda tile_index, tile:
                         (state['latent'][tile] | Set(state, "tile_latent")) >> \
 
@@ -138,6 +138,16 @@ class DoubleShedPipeline(Flow):
 
                             (region | CalcBaseMask(region_index, timestep_index, state)) >> \
 
+                            (state['tile_controlnet_video']
+                                | If(region.mask is not None,
+                                    lambda v: v | VideoShrink(
+                                        region.mask[tile].cfg(guidance_scale=state['guidance_scale']),
+                                        padding=16
+                                        )
+                                    )
+                                | Set(state, 'tile_controlnet_shrinked_video')
+                                ) >> \
+
                             (state['tile_latent']
                                 #| If(state['loras'] is not None, lambda x: x | LorasOn(state['loras'], pipe=state['pipe'], frames=tile[2]))
                                 | If((region.start_timestep if region.start_timestep is not None else 0) <= timestep_index and \
@@ -146,7 +156,10 @@ class DoubleShedPipeline(Flow):
                                             else len(state['timesteps1'])) and \
                                         state['tile_latent'].latent.shape[2] > 0 and \
                                         state['tile_latent'].latent.shape[3] > 0 and \
-                                        state['tile_latent'].latent.shape[4] > 0,
+                                        state['tile_latent'].latent.shape[4] > 0 and \
+                                        state['tile_controlnet_shrinked_video'].chw().shape[1] > 0 and \
+                                        state['tile_controlnet_shrinked_video'].chw().shape[3] > 0 and \
+                                        state['tile_controlnet_shrinked_video'].chw().shape[4] > 0,
                                     lambda x: x
                                         | CFGPrepare(guidance_scale=state['guidance_scale'])
                                         | Set(state, 'tile_latent_cfg')
@@ -159,14 +172,7 @@ class DoubleShedPipeline(Flow):
                                         | If(state[f'cnet{region_index+1}'] is not None, lambda x: x | state['cnet'](
                                             timestep_index=timestep_index,
                                             timestep=state[f'timesteps{region_index+1}'][timestep_index],
-                                            image=[x for x in (state["tile_controlnet_video"]
-                                                | If(region.mask is not None,
-                                                    lambda v: v | VideoShrink(
-                                                        region.mask[tile].cfg(guidance_scale=state['guidance_scale']),
-                                                        padding=16
-                                                        )
-                                                    )
-                                                ).cnet().tensor],
+                                            image=[x for x in state["tile_controlnet_shrinked_video"].cnet().tensor],
                                             timesteps=state[f'timesteps{region_index+1}'],
                                             controlnet_scale=region.controlnet_scale,
                                             embeddings=region.prompt.embeddings.slice(tile[2]),
