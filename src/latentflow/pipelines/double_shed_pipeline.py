@@ -99,7 +99,7 @@ class DoubleShedPipeline(Flow):
                 | AddNoise(scheduler=state['pipe'].scheduler, timesteps=state['timesteps1'])
                 )
             | Loop(state['timesteps1'], name="Denoise loop", progress_bar=state['video_length'] < 500, callback=lambda timestep_index, timestep:
-                (Latent(torch.zeros_like(state['latent'].latent).repeat(2,1,1,1,1)) > state('noise_predict')) >> \
+                (Latent(torch.zeros_like(state['latent'].latent).repeat((2 if state['guidance_scale'] > 1.0 else 1),1,1,1,1)) > state('noise_predict')) >> \
 
                 (Tensor(torch.zeros_like(state['latent'].latent)) > state('pixel_infer_count')) >> \
 
@@ -116,7 +116,7 @@ class DoubleShedPipeline(Flow):
                         width_offset=random.randint(0, state['tile']['width_overlap']//8) if state['tile']['width'] < state['width'] else 0,
                         ),
                     state['latent'],
-                    do_classifier_free_guidance=True,
+                    do_classifier_free_guidance = (state['guidance_scale'] > 1.0),
                     ) | Set(state, 'tile_generator')) >> \
 
                 (state | Loop(
@@ -175,12 +175,13 @@ class DoubleShedPipeline(Flow):
                                             image=[x for x in state["tile_controlnet_shrinked_video"].cnet().tensor],
                                             timesteps=state[f'timesteps{region_index+1}'],
                                             controlnet_scale=region.controlnet_scale,
-                                            embeddings=region.prompt.embeddings.slice(tile[2]),
+                                            embeddings=region.prompt.embeddings.slice(tile[2], do_classifier_free_guidance=state['guidance_scale'] > 1.0),
+                                            do_classifier_free_guidance=(state['guidance_scale'] > 1.0),
                                         ))
                                         | LoraOn(region.loras, pipe=state['pipe'])
                                         | state[f'unet{region_index+1}'](
                                             timestep=state[f'timesteps{region_index+1}'][timestep_index],
-                                            embeddings=region.prompt.embeddings.slice(tile[2]),
+                                            embeddings=region.prompt.embeddings.slice(tile[2], do_classifier_free_guidance=state['guidance_scale'] > 1.0),
                                         )
                                         | If(region.mask is not None,
                                             lambda x: x | LatentUnshrink(
@@ -191,18 +192,18 @@ class DoubleShedPipeline(Flow):
                                             )
                                         | If(region.mask is not None,
                                             lambda x: x | region.mask[tile].cfg(guidance_scale=state['guidance_scale']))
-                                        | LatentAdd(state['noise_predict'], tile)
-                                        | IncrementPixelAuditByMask(state, tile, region.mask)
-                                        | LoraOff(pipe=state['pipe'])
                                 , desc=f"Region {region_index} {state['tile_latent']}")
                             )
+                            | LatentAdd(state['noise_predict'], tile)
+                            | IncrementPixelAuditByMask(state, tile, region.mask)
+                            | LoraOff(pipe=state['pipe'])
                             | Debug("Region loop end")
                         ))
 
                 )) >> \
 
                 (state['noise_predict']
-                   | Apply(lambda x: NoisePredict(x.latent / state['pixel_infer_count'].tensor.repeat(2,1,1,1,1)))
+                   | Apply(lambda x: NoisePredict(x.latent / state['pixel_infer_count'].tensor.repeat((2 if state['guidance_scale'] > 1.0 else 1),1,1,1,1)))
                    | CFGProcess(guidance_scale=state['guidance_scale'])
                    | Set(state, 'noise_predict')
                    | Step(

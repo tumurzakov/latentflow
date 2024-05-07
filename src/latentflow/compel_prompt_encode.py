@@ -100,6 +100,8 @@ class CompelPromptEncode(Flow):
         prompt.offload()
         self.offload()
 
+        logging.debug(f"CompelPromptEncode applied {prompt.embeddings}")
+
         return prompt
 
     def encode(self, prompt, negative_prompt, num_videos_per_prompt=1):

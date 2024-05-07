@@ -152,7 +152,7 @@ class TileRegionPipeline(Flow):
                             (region | CalcBaseMask(region_index, timestep_index, state)) >> \
 
                             (state['tile_latent']
-                                | If(state['loras'] is not None, lambda x: x | LorasOn(state['loras'], pipe=state['pipe'], frames=tile[2]))
+                                #| If(state['loras'] is not None, lambda x: x | LorasOn(state['loras'], pipe=state['pipe'], frames=tile[2]))
                                 | If(
                                     (region.start_timestep if region.start_timestep is not None else 0) <= timestep_index and \
                                     timestep_index < (region.stop_timestep if region.stop_timestep is not None else len(state['timesteps'])),
@@ -180,7 +180,7 @@ class TileRegionPipeline(Flow):
                                             #    text_encoder=state['pipe'].text_encoder),
 
                                         ))
-                                        #| LoraOn(region.loras, pipe=state['pipe'])
+                                        | LoraOn(region.loras, pipe=state['pipe'])
                                         | state['unet'](
                                             timestep=timestep,
                                             embeddings=region.prompt.embeddings.slice(tile[2]),

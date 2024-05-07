@@ -57,7 +57,6 @@ class ControlNet(Flow):
             control_guidance_start: Union[float, List[float]] = 0.0,
             control_guidance_end: Union[float, List[float]] = 1.0,
             guess_mode: bool = False,
-            do_classifier_free_guidance: bool = True,
             dtype=torch.float32,
             onload_device='cuda',
             offload_device='cpu',
@@ -82,7 +81,6 @@ class ControlNet(Flow):
         self.control_guidance_start = control_guidance_start
         self.control_guidance_end = control_guidance_end
 
-        self.do_classifier_free_guidance = do_classifier_free_guidance
 
         self.controlnet = self.controlnet._orig_mod if is_compiled_module(self.controlnet) else self.controlnet
 
@@ -121,6 +119,7 @@ class ControlNet(Flow):
             timesteps=None,
             controlnet_scale = 1.0,
             embeddings = None,
+            do_classifier_free_guidance = 7.5,
             ):
 
         self.timestep_index = timestep_index
@@ -128,6 +127,7 @@ class ControlNet(Flow):
         self.timesteps = timesteps
         self.latent = latent
         self.embeddings = embeddings
+        self.do_classifier_free_guidance = do_classifier_free_guidance
 
         if image is not None:
             self.controlnet_images = image
@@ -170,6 +170,7 @@ class ControlNet(Flow):
 
             logging.debug("ControlNet images %s %s %s", i, controlnet_images[i].shape, controlnet_images[i].dtype)
 
+        logging.debug("ControlNet cfg %s", self.do_classifier_free_guidance)
         logging.debug("ControlNet embeddings %s %s", embeddings.shape, embeddings.dtype)
         logging.debug("ControlNet latents %s %s", latent_model_input.shape, latent_model_input.dtype)
 

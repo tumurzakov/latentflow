@@ -163,11 +163,12 @@ class Mask(Flow):
 
             x, y, w, h = cv2.boundingRect(merged_contour)
 
-            dims = self.mode.split(' ')
-            tile[dims.index('h')] = slice(y-padding, y+h+padding)
-            tile[dims.index('w')] = slice(x-padding, x+w+padding)
-            origin = self
-            origin_tile = tile
+            if w>0 and h>0:
+                dims = self.mode.split(' ')
+                tile[dims.index('h')] = slice(max(0, y-padding), max(0, y+h+padding))
+                tile[dims.index('w')] = slice(max(0, x-padding), max(0, x+w+padding))
+                origin = self
+                origin_tile = tile
 
         return Mask(self.mask[tile], origin=origin, origin_tile=origin_tile)
 

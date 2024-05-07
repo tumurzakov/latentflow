@@ -21,12 +21,17 @@ class PromptEmbeddings(Flow):
     def offload(self):
         self.embeddings = self.embeddings.to(self.offload_device)
 
-    def slice(self, l):
+    def slice(self, l, do_classifier_free_guidance=True):
         logging.debug(f"PromptEmbeddings slice {l}")
-        uncond_embeddings, cond_embeddings = self.embeddings.chunk(2)
-        uncond = uncond_embeddings[l,:,:]
-        cond = cond_embeddings[l,:,:]
-        embeddings = torch.cat([uncond, cond])
+
+        if do_classifier_free_guidance:
+            uncond_embeddings, cond_embeddings = self.embeddings.chunk(2)
+            uncond = uncond_embeddings[l,:,:]
+            cond = cond_embeddings[l,:,:]
+            embeddings = torch.cat([uncond, cond])
+        else:
+            embeddings = self.embeddings[l,:,:]
+
         return PromptEmbeddings(embeddings)
 
     def save(self, path):

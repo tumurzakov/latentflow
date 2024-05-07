@@ -120,27 +120,24 @@ class Unet(Flow):
 
 class CFGPrepare(Flow):
     def __init__(self,
-            do_classifier_free_guidance=True,
             guidance_scale=7.5,
             ):
-        self.do_classifier_free_guidance=do_classifier_free_guidance
         self.guidance_scale=guidance_scale
 
     def apply(self, latent):
         latent_model_input = latent.latent
-        latent_model_input = latent_model_input.repeat(2 if self.do_classifier_free_guidance else 1, 1, 1, 1, 1)
+        latent_model_input = latent_model_input.repeat(2 if self.guidance_scale > 1.0 else 1, 1, 1, 1, 1)
         return Latent(latent_model_input)
 
 class CFGProcess(Flow):
     def __init__(self,
-            do_classifier_free_guidance=True,
             guidance_scale=7.5,
             ):
-        self.do_classifier_free_guidance=do_classifier_free_guidance
         self.guidance_scale=guidance_scale
 
     def apply(self, noise_predict):
         noise_pred =  noise_predict.latent
-        noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-        noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
+        if self.guidance_scale > 1.0:
+            noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+            noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
         return NoisePredict(noise_pred)

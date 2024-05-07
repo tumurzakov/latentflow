@@ -29,14 +29,18 @@ class Flow:
         return other
 
 class If(Flow):
-    def __init__(self, condition, callback, desc=""):
+    def __init__(self, condition, callback, desc="", raise_errors=True):
         self.condition = condition
         self.callback = callback
         self.desc = desc
+        self.raise_errors = raise_errors
 
     def apply(self, other):
         logging.debug("If %s %s", self.condition, self.desc)
         if self.condition:
+            if self.raise_errors:
+                return self.callback(other)
+
             try:
                 return self.callback(other)
             except Exception as e:

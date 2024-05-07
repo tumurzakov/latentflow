@@ -56,8 +56,8 @@ class LatentUnshrink(Flow):
             return unshrink_latent
         except Exception as e:
             logging.error("LatentUnshrink error %s %s", e, latent)
-            logging.error("LatentUnshrink error %s %s %s %s",
-                    latent_tile,
+            logging.error("LatentUnshrink error %s %s", latent_tile, shrink_mask.origin_tile)
+            logging.error("LatentUnshrink error %s %s %s",
                     unshrink_latent.shape,
                     unshrink_latent[latent_tile].shape,
                     latent.latent.shape)
