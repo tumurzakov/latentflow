@@ -56,7 +56,7 @@ class CalcBaseMask(Flow):
         self.region_index = region_index
         self.timestep_index = timestep_index
         self.regions = state['regions']
-        self.timesteps = state['timesteps']
+        self.timesteps = state['timesteps1']
 
     def apply(self, region):
 
@@ -142,14 +142,13 @@ class DoubleShedPipeline(Flow):
                                 | If(region.mask is not None,
                                     lambda v: v | VideoShrink(
                                         region.mask[tile].cfg(guidance_scale=state['guidance_scale']),
-                                        padding=16
+                                        padding=0 if state['shrink_padding'] is None else state['shrink_padding'],
                                         )
                                     )
                                 | Set(state, 'tile_controlnet_shrinked_video')
                                 ) >> \
 
                             (state['tile_latent']
-                                #| If(state['loras'] is not None, lambda x: x | LorasOn(state['loras'], pipe=state['pipe'], frames=tile[2]))
                                 | If((region.start_timestep if region.start_timestep is not None else 0) <= timestep_index and \
                                     timestep_index < ( \
                                             region.stop_timestep if region.stop_timestep is not None \
@@ -166,10 +165,10 @@ class DoubleShedPipeline(Flow):
                                         | If(region.mask is not None,
                                             lambda x: x | LatentShrink(
                                                 region.mask[tile].cfg(guidance_scale=state['guidance_scale']),
-                                                padding=2
+                                                padding=0 if state['shrink_padding'] is None else state['shrink_padding']//8,
                                                 )
                                             )
-                                        | If(state[f'cnet{region_index+1}'] is not None, lambda x: x | state['cnet'](
+                                        | If(state[f'cnet{region_index+1}'] is not None, lambda x: x | state[f'cnet{region_index+1}'](
                                             timestep_index=timestep_index,
                                             timestep=state[f'timesteps{region_index+1}'][timestep_index],
                                             image=[x for x in state["tile_controlnet_shrinked_video"].cnet().tensor],
@@ -187,7 +186,7 @@ class DoubleShedPipeline(Flow):
                                             lambda x: x | LatentUnshrink(
                                                 state['tile_latent_cfg'],
                                                 region.mask[tile].cfg(guidance_scale=state['guidance_scale']),
-                                                padding=2
+                                                padding=0 if state['shrink_padding'] is None else state['shrink_padding']//8,
                                                 )
                                             )
                                         | If(region.mask is not None,

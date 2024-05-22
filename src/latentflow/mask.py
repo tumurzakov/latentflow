@@ -37,7 +37,7 @@ class Mask(Flow):
         self.mask = self.mask.to(self.offload_device)
 
     def binarize(self, threshold=0.5):
-        return Mask((self.mask > threshold).to(torch.float), origin=self)
+        return Mask(torch.clamp((self.mask > threshold).to(torch.float), 0, 1), origin=self)
 
     def apply(self, other):
         self.onload()
@@ -61,6 +61,9 @@ class Mask(Flow):
 
     def __str__(self):
         return f'Mask({self.mask.shape})'
+
+    def __len__(self):
+        return self.mask.shape[2]
 
     def __getitem__(self, key):
         return Mask(self.mask[key], origin=self, origin_tile=key)

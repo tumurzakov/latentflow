@@ -70,7 +70,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
             scheduler_class=scheduler_class,
             extra_tokens=extra_tokens,
             controlnet=controlnet,
-            loras=loras,
+            loras=loras if loras is not None else {},
             onload_device=onload_device,
             offload_device=offload_device,
             *args,

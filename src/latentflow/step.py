@@ -28,6 +28,7 @@ class Step(Flow):
         self.latent.onload()
 
         latent_model_input = self.latent.latent
+        latent_model_input = self.scheduler.scale_model_input(latent_model_input, self.timestep)
 
         if noise_predict is None and isinstance(self.noise_predict, NoisePredict):
             noise_predict = self.noise_predict

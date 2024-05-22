@@ -17,6 +17,17 @@ def tensor_hash(tensors):
         hash_obj.update(tensor_bytes)
     return hash_obj.hexdigest()
 
+class Print(Flow):
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+    def apply(self, other):
+        for i, k in enumerate(self.args):
+            print(i, k)
+
+        return other
+
 class Log(Flow):
     def __init__(self, level=logging.DEBUG, comment="", callback=None):
         self.comment = comment

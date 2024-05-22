@@ -63,7 +63,7 @@ class CompelPromptEncode(Flow):
             last = None
 
             embeddings = []
-            for i, p in enumerate(tqdm(prompt.prompts)):
+            for i, p in enumerate(tqdm(prompt.prompts, desc='compel')):
                 e = None
                 if p is not None:
                     if p.embeddings is None:

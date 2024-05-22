@@ -75,6 +75,8 @@ class Unet(Flow):
         timestep = self.timestep
         embeddings = self.embeddings
 
+        logging.debug("Unet latent type %s", type(latent))
+
         down_block_res_samples = None
         mid_block_res_sample = None
         if isinstance(latent, ControlNetLatent):
@@ -127,17 +129,44 @@ class CFGPrepare(Flow):
     def apply(self, latent):
         latent_model_input = latent.latent
         latent_model_input = latent_model_input.repeat(2 if self.guidance_scale > 1.0 else 1, 1, 1, 1, 1)
-        return Latent(latent_model_input)
+        latent_model_input = Latent(latent_model_input)
+
+        logging.debug("CFGPrepare %s", latent_model_input)
+
+        return latent_model_input
+
+def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
+    """
+    Rescale `noise_cfg` according to `guidance_rescale`. Based on findings of [Common Diffusion Noise Schedules and
+    Sample Steps are Flawed](https://arxiv.org/pdf/2305.08891.pdf). See Section 3.4
+    """
+    std_text = noise_pred_text.std(dim=list(range(1, noise_pred_text.ndim)), keepdim=True)
+    std_cfg = noise_cfg.std(dim=list(range(1, noise_cfg.ndim)), keepdim=True)
+    # rescale the results from guidance (fixes overexposure)
+    noise_pred_rescaled = noise_cfg * (std_text / std_cfg)
+    # mix with the original results from guidance by factor guidance_rescale to avoid "plain looking" images
+    noise_cfg = guidance_rescale * noise_pred_rescaled + (1 - guidance_rescale) * noise_cfg
+    return noise_cfg
 
 class CFGProcess(Flow):
     def __init__(self,
             guidance_scale=7.5,
+            guidance_rescale=None,
             ):
         self.guidance_scale=guidance_scale
+        self.guidance_rescale=guidance_rescale
 
     def apply(self, noise_predict):
         noise_pred =  noise_predict.latent
         if self.guidance_scale > 1.0:
             noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
             noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
-        return NoisePredict(noise_pred)
+
+            if self.guidance_rescale is not None and self.guidance_rescale > 0.0 :
+                noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=self.guidance_rescale)
+
+        noise_pred = NoisePredict(noise_pred)
+
+        logging.debug("CFGProcess %s", noise_pred)
+
+        return noise_pred

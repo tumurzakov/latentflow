@@ -22,7 +22,7 @@ class PromptEmbeddings(Flow):
         self.embeddings = self.embeddings.to(self.offload_device)
 
     def slice(self, l, do_classifier_free_guidance=True):
-        logging.debug(f"PromptEmbeddings slice {l}")
+        logging.debug(f"PromptEmbeddings slice {l} {self}")
 
         if do_classifier_free_guidance:
             uncond_embeddings, cond_embeddings = self.embeddings.chunk(2)

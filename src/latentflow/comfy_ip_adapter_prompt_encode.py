@@ -43,6 +43,8 @@ class ComfyIPAdapterPromptEncode(Flow):
             noise=0.0,
             pipe=None,
             weight=1.0,
+            num_tokens=4,
+            mode='concat',
             onload_device='cuda',
             offload_device='cpu',
             ):
@@ -57,6 +59,8 @@ class ComfyIPAdapterPromptEncode(Flow):
         self.weight = weight
         self.onload_device = onload_device
         self.offload_device = offload_device
+        self.num_tokens = num_tokens
+        self.mode = mode
 
         self.model = None
 
@@ -125,7 +129,7 @@ class ComfyIPAdapterPromptEncode(Flow):
             if cross_attention_dim is None:
                 attn_procs[name] = AttnProcessor()
             else:
-                attn_procs[name] = IPAttnProcessor(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim).to(unet.device, dtype=unet.dtype)
+                attn_procs[name] = IPAttnProcessor(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim, num_tokens=self.num_tokens).to(unet.device, dtype=unet.dtype)
 
         unet.set_attn_processor(attn_procs)
 
@@ -145,7 +149,7 @@ class ComfyIPAdapterPromptEncode(Flow):
 
         return self
 
-    def __call__(self, video, weight=None, scale=None):
+    def __call__(self, video, weight=None, scale=None, mode=None):
         self.video = video
 
         if weight is not None:
@@ -153,6 +157,9 @@ class ComfyIPAdapterPromptEncode(Flow):
 
         if scale is not None:
             self.set_scale(scale)
+
+        if mode is not None:
+            self.mode = mode
 
         return self
 
@@ -175,10 +182,10 @@ class ComfyIPAdapterPromptEncode(Flow):
                 if h in self.tensor_cache:
                     e = self.tensor_cache[h]
                 else:
-                    try:
-                        e = self.encode(p.embeddings.embeddings, image)
-                    except:
-                        e = last
+                    text_embeddings = None
+                    if p.embeddings is not None:
+                        text_embeddings = p.embeddings.embeddings
+                    e = self.encode(text_embeddings, image)
 
                     self.tensor_cache[h] = e
 
@@ -197,7 +204,12 @@ class ComfyIPAdapterPromptEncode(Flow):
             self.tensor_cache = {}
         else:
             image = self.video.hwc()[0][:1]/255.0
-            embeddings = self.encode(prompt.embeddings.embeddings, image)
+
+            text_embeddings = None
+            if p.embeddings is not None:
+                text_embeddings = p.embeddings.embeddings
+
+            embeddings = self.encode(text_embeddings, image)
 
         prompt.embeddings = PromptEmbeddings(embeddings)
 
@@ -229,6 +241,15 @@ class ComfyIPAdapterPromptEncode(Flow):
         uncond_embeddings = uncond_image_embeddings
         if embeddings is not None:
             uncond_embeddings, cond_embeddings = embeddings.chunk(2)
+
+            if self.mode == 'average':
+                prev_uncond_image_embeddings = uncond_embeddings[:, -self.num_tokens:,:]
+                prev_cond_image_embeddings = cond_embeddings[:, -self.num_tokens:,:]
+                uncond_image_embeddings = torch.mean(torch.stack([prev_uncond_image_embeddings, uncond_image_embeddings], dim=1), dim=1)
+                cond_image_embeddings = torch.mean(torch.stack([prev_cond_image_embeddings, cond_image_embeddings], dim=1), dim=1)
+                uncond_embeddings = uncond_embeddings[:, :-self.num_tokens, :]
+                cond_embeddings = cond_embeddings[:, :-self.num_tokens, :]
+
             cond_embeddings = torch.cat([cond_embeddings, cond_image_embeddings], dim=1)
             uncond_embeddings = torch.cat([uncond_embeddings, uncond_image_embeddings], dim=1)
 

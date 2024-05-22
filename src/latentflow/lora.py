@@ -10,8 +10,15 @@ from .unet import Unet
 from .train import Params
 
 class LoraOn(Flow):
-    def __init__(self, loras: dict = {}, pipe=None, fuse=False):
+    def __init__(self, loras={}, pipe=None, fuse=False):
         self.loras = loras
+
+        if isinstance(loras, list):
+            self.loras = {}
+            for l in loras:
+                if l is not None and isinstance(l, dict):
+                    self.loras.update(l)
+
         self.pipe = pipe
         self.fuse = fuse
 

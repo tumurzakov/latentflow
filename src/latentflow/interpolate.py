@@ -5,8 +5,9 @@ from einops import rearrange
 
 from .flow import Flow
 from .tensor import Tensor
-from .latent import Latent
+from .latent import Latent, NoisePredict
 from .video import Video
+from .mask import Mask
 
 class Interpolate(Flow):
     def __init__(self,
@@ -30,8 +31,10 @@ class Interpolate(Flow):
 
         if isinstance(tensor, Tensor):
             t = tensor.tensor
-        elif isinstance(tensor, Latent):
+        elif isinstance(tensor, Latent) or isinstance(tensor, NoisePredict):
             t = tensor.latent
+        elif isinstance(tensor, mask):
+            t = tensor.mask
         elif isinstance(tensor, Video):
             t = tensor.hwc()
 
@@ -70,8 +73,12 @@ class Resize(Interpolate):
         t = None
         if isinstance(tensor, Tensor):
             t = tensor.tensor
-        elif isinstance(tensor, Latent):
+        elif isinstance(tensor, Latent) or isinstance(tensor, NoisePredict):
             t = tensor.latent
+            t = rearrange(t, 'b c f h w -> (b f) c h w')
+            self.mode = 'nearest-exact'
+        elif isinstance(tensor, Mask):
+            t = tensor.mask
             t = rearrange(t, 'b c f h w -> (b f) c h w')
             self.mode = 'nearest-exact'
         elif isinstance(tensor, Video):
@@ -84,7 +91,10 @@ class Resize(Interpolate):
         t = super().apply(Tensor(t))
         t = t.tensor
 
-        if isinstance(tensor, Latent):
+        if isinstance(tensor, Latent) or isinstance(tensor, NoisePredict):
+            t = rearrange(t, '(b f) c h w -> b c f h w', f=len(tensor))
+            result = type(tensor)(t)
+        if isinstance(tensor, Mask):
             t = rearrange(t, '(b f) c h w -> b c f h w', f=len(tensor))
             result = type(tensor)(t)
         elif isinstance(tensor, Video):

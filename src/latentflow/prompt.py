@@ -14,6 +14,8 @@ class Prompt(Flow):
             frames: List = None,
             prompts: List = None,
             embeddings = None,
+            loras = None,
+            controlnet = None,
             ):
 
         self.prompt = prompt
@@ -23,6 +25,8 @@ class Prompt(Flow):
         self.frames = frames
         self.prompts = prompts
         self.embeddings = embeddings
+        self.loras = loras
+        self.controlnet = controlnet
 
         self.init_frames()
 
@@ -37,6 +41,8 @@ class Prompt(Flow):
                             image=self.image[:, x:x+1] if self.image is not None else None,
                             negative_image=self.negative_image[:, x:x+1] if self.negative_image is not None else None,
                             embeddings=self.embeddings,
+                            loras=self.loras,
+                            controlnet=self.controlnet,
                             )
 
         if self.frames is not None:
@@ -78,6 +84,12 @@ class Prompt(Flow):
 
         return Prompt(prompts=prompts, frames=frames)
 
+    def __getitem__(self, key):
+        if self.prompts is None:
+            return None
+
+        return self.prompts[key]
+
     def set(self, prompt):
         frames = [None for x in range(max(max(self.frames), max(prompt.frames))+1)]
 
@@ -112,7 +124,14 @@ class Prompt(Flow):
                 if p is not None:
                     prompt = prompt + f'{i}: {p}\n'
         else:
-            prompt = f'Prompt(\n+[{self.prompt}],\n-[{self.negative_prompt}]\n)'
+            desc = []
+            desc.append(f'+[{self.prompt}]')
+            desc.append(f'-[{self.negative_prompt}]')
+            if self.loras is not None:
+                desc.append(f'loras={self.loras}')
+            desc = ",\n".join(desc)
+
+            prompt = f'Prompt(\n{desc}\n)'
 
         return prompt
 

@@ -74,7 +74,9 @@ class Video(Flow):
         assert len(path) == video.shape[0], "Path count must match batch size"
 
         for v, p in zip(video, path):
-            if '%' in path:
+            logging.debug(f"Video save {p}")
+
+            if '%' in p:
                 self.write_images(v, p, start_frame)
             elif p.endswith('.pth'):
                 torch.save(v, p)
@@ -129,6 +131,8 @@ class Video(Flow):
         return Tensor(self.chw().float()/255.0)
 
     def write_images(self, frames, output_path, start_frame = 0):
+        logging.debug(f"Video write_images {output_path}, {len(frames)}, {start_frame}")
+
         dirname = os.path.dirname(output_path)
         if not os.path.isdir(dirname):
             os.makedirs(dirname, exist_ok=True)
@@ -139,6 +143,7 @@ class Video(Flow):
             img.save(output_path % frame_number)
 
     def write_video_cv2(self, frames, output_path, fps):
+        logging.debug(f"Video write_video {output_path}, {len(frames)}, {fps}")
 
         if frames.dtype == torch.float32 and torch.std(frames) < 2.0:
             frames = (frames * 255).to(torch.uint8)
