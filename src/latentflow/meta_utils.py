@@ -19,7 +19,13 @@ def read_meta(file_path, context=None):
         meta = OmegaConf.to_container(OmegaConf.load(file_path), resolve=True)
 
     if context is not None:
-        meta = change_placeholders(meta, context)
+        c = {}
+        c.update(context)
+        for k in meta:
+            if isinstance(meta[k], str):
+                c[k] = meta[k]
+        print('context', c)
+        meta = change_placeholders(meta, c)
 
     return meta
 

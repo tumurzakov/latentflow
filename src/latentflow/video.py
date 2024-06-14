@@ -76,6 +76,10 @@ class Video(Flow):
         for v, p in zip(video, path):
             logging.debug(f"Video save {p}")
 
+            dirname = os.path.dirname(p)
+            if not os.path.isdir(dirname):
+                os.makedirs(dirname, exist_ok=True)
+
             if '%' in p:
                 self.write_images(v, p, start_frame)
             elif p.endswith('.pth'):

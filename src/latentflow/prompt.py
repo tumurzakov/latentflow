@@ -79,10 +79,25 @@ class Prompt(Flow):
                 prompts[i] = p
                 frames.append(i)
 
+        last = None
+        embeddings = []
+        for i, p in enumerate(prompts):
+            if p is not None:
+                last = p
+            else:
+                prompts[i] = last
+
+            embeddings.append(prompts[i].embeddings.embeddings)
+
+        length = len(prompts)
+        bs_embed, seq_len, _ = embeddings[0].shape
+        embeddings = torch.cat(embeddings, dim=1)
+        embeddings = embeddings.view(bs_embed * length, seq_len, -1)
+
         frames = list(set(frames))
         frames.sort()
 
-        return Prompt(prompts=prompts, frames=frames)
+        return Prompt(prompts=prompts, frames=frames, embeddings=PromptEmbeddings(embeddings))
 
     def __getitem__(self, key):
         if self.prompts is None:

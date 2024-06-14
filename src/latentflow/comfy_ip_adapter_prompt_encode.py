@@ -185,7 +185,7 @@ class ComfyIPAdapterPromptEncode(Flow):
                     text_embeddings = None
                     if p.embeddings is not None:
                         text_embeddings = p.embeddings.embeddings
-                    e = self.encode(text_embeddings, image)
+                    e = self.encode(text_embeddings.to(self.onload_device), image)
 
                     self.tensor_cache[h] = e
 
@@ -206,10 +206,10 @@ class ComfyIPAdapterPromptEncode(Flow):
             image = self.video.hwc()[0][:1]/255.0
 
             text_embeddings = None
-            if p.embeddings is not None:
-                text_embeddings = p.embeddings.embeddings
+            if prompt.embeddings is not None:
+                text_embeddings = prompt.embeddings.embeddings
 
-            embeddings = self.encode(text_embeddings, image)
+            embeddings = self.encode(text_embeddings.to(self.onload_device), image)
 
         prompt.embeddings = PromptEmbeddings(embeddings)
 
