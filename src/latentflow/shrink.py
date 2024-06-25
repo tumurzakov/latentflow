@@ -2,6 +2,7 @@ import torch
 import logging
 from .flow import Flow
 from .latent import Latent
+from .slice_utils import slice_scale
 
 class LatentShrink(Flow):
     def __init__(self, mask, padding=0):
@@ -88,5 +89,34 @@ class VideoShrink(Flow):
             return shrink_video
         except Exception as e:
             logging.error("VideoShrink %s %s", e, video)
+            raise e
+
+class VideoShrinkReplace(Flow):
+    def __init__(self, mask, original_video, padding=0):
+        self.mask = mask
+        self.padding = padding
+        self.original_video = original_video
+        self.scale = original_video.hwc().shape[-2]/self.mask.hwc().shape[-2]
+
+    def apply(self, video):
+        logging.debug("VideoShrinkReplace %s %s %s", self.mask, self.original_video, self.scale)
+        try:
+            shrink_mask = self.mask.shrink(int(self.padding//8))
+            video_tile = shrink_mask.origin_tile
+            video_tile = (
+                    slice(0, video.video.shape[0]),
+                    video_tile[2],
+                    slice_scale(slice(video_tile[3].start * 8, video_tile[3].stop * 8), self.scale),
+                    slice_scale(slice(video_tile[4].start * 8, video_tile[4].stop * 8), self.scale),
+                    slice(0, 3),
+                    )
+
+            shrink_video = self.original_video[video_tile]
+
+            logging.debug("VideoShrinkReplace %s %s", video_tile, shrink_video)
+
+            return shrink_video
+        except Exception as e:
+            logging.error("VideoShrinkReplace %s %s", e, video)
             raise e
 

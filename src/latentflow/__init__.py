@@ -48,7 +48,7 @@ try:
     from latentflow.pipeline import Pipeline
     from latentflow.sd_upscale import SDUpscale
     from latentflow.res_adapter import ResAdapter
-    from latentflow.shrink import LatentShrink, LatentUnshrink, VideoShrink
+    from latentflow.shrink import LatentShrink, LatentUnshrink, VideoShrink, VideoShrinkReplace
 
     from latentflow.mask import (
             MaskEncode,
@@ -84,6 +84,7 @@ except Exception as e:
 
 try:
     from latentflow.video_face_crop import VideoFaceCrop
+    from latentflow.video_face_mask import VideoFaceMask
 except Exception as e:
     logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 

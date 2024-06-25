@@ -22,6 +22,7 @@ class Region(Flow):
             name = None,
             start_timestep = None,
             stop_timestep = None,
+            shrink = None,
             ):
         self.scheduler = scheduler
         self.controlnet_video = controlnet_video
@@ -35,6 +36,7 @@ class Region(Flow):
         self.name = name
         self.start_timestep = start_timestep
         self.stop_timestep = stop_timestep
+        self.shrink = shrink
 
     def apply(self, prompt: Prompt):
         self.prompt = prompt
