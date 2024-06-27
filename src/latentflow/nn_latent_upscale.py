@@ -1,3 +1,4 @@
+import gc
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -281,12 +282,13 @@ class NNLatentUpscale(Flow):
 
     @torch.no_grad()
     def apply(self, latent):
-        latents = latent.latent
 
         latent.onload()
         self.onload()
 
-        self.model = self.model.to(latent.dtype)
+        latents = latent.latent
+
+        self.model = self.model.to(latents.dtype)
 
         frames = []
         for f in range(latents.shape[2]):

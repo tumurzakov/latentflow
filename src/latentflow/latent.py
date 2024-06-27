@@ -108,6 +108,9 @@ class Latent(Flow):
     def __len__(self):
         return self.latent.shape[2]
 
+    def zeros_like(self):
+        return Latent(torch.zeros_like(self.latent))
+
 
 class NoisePredict(Latent):
     def __str__(self):

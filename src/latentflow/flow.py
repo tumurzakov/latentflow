@@ -73,3 +73,7 @@ class Set(Flow):
         else:
             self.var[self.key] = other
         return other
+
+class Value(Flow):
+    def __init__(self, value):
+        self.value = value

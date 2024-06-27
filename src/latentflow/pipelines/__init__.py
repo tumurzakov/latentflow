@@ -1,2 +1,3 @@
 from .tile_region_pipeline import TileRegionPipeline
 from .simple_pipeline import SimplePipeline
+from .region_shed_pipeline import RegionShedPipeline

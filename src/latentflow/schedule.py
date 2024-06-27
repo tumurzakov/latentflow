@@ -40,7 +40,7 @@ class Schedule(Flow):
         timesteps = self.scheduler.timesteps[t_start * self.scheduler.order :]
         return timesteps, num_inference_steps - t_start
 
-    def apply(self, other) -> Timesteps:
+    def apply(self, other=None) -> Timesteps:
 
         self.scheduler.set_timesteps(self.num_inference_steps, device=self.onload_device)
         self.timesteps = self.scheduler.timesteps

@@ -18,11 +18,14 @@ class Region(Flow):
             guidance_scale = None,
             source_latent = None,
             latent = None,
+            noise_predict = None,
             scheduler = None,
             name = None,
             start_timestep = None,
             stop_timestep = None,
             shrink = None,
+            pixel_infer_count = None,
+            latent_shrinked = None,
             ):
         self.scheduler = scheduler
         self.controlnet_video = controlnet_video
@@ -32,16 +35,24 @@ class Region(Flow):
         self.guidance_scale = guidance_scale
         self.source_latent = source_latent
         self.latent = latent
+        self.noise_predict = noise_predict
         self.timesteps = Timesteps()
         self.name = name
         self.start_timestep = start_timestep
         self.stop_timestep = stop_timestep
         self.shrink = shrink
+        self.pixel_infer_count = pixel_infer_count
+        self.latent_shrinked = latent_shrinked
+
+        self.key = None
 
     def apply(self, prompt: Prompt):
         self.prompt = prompt
 
         return self
+
+    def __setitem__(self, key, value):
+        self.__dict__.update({key: value})
 
     def __str__(self):
         return 'Region(%s, %s, %s)' % (

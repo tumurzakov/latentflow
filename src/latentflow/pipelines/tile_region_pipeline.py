@@ -195,23 +195,13 @@ class TileRegionPipeline(Flow):
 
                                 (Debug(f'Region {region_index}') | If(state['cnet'] is not None, lambda v:
                                     state['tile_controlnet_video']
-                                    | If(region.mask is not None and region.shrink is not None and region.shrink['original_video'] is None,
+                                    | If(region.mask is not None and region.shrink is not None,
                                         lambda v: v
                                             | VideoShrink(
                                                 region.mask[tile].cfg(guidance_scale=state['guidance_scale']),
                                                 padding=0 if region.shrink['shrink_padding'] is None else region.shrink['shrink_padding'],
                                             )
-                                            | If(region.shrink['shrink_resize'] is not None,
-                                                lambda x: x | Resize(region.shrink['shrink_resize']), desc='shrink resize')
                                         , desc='shrink')
-                                    | If(region.mask is not None and region.shrink is not None and region.shrink['original_video'] is not None,
-                                        lambda v: v
-                                            | VideoShrinkReplace(
-                                                region.mask[tile].cfg(guidance_scale=state['guidance_scale']),
-                                                region.shrink['original_video'],
-                                                padding=0 if region.shrink['shrink_padding'] is None else region.shrink['shrink_padding'],
-                                            )
-                                        , desc='shrink original video')
                                     | Set(state, 'tile_controlnet_shrinked_video')
                                     , desc='cnet tile')
                                 ) >> \
@@ -244,8 +234,6 @@ class TileRegionPipeline(Flow):
                                                         region.mask[tile].cfg(guidance_scale=state['guidance_scale']),
                                                         padding=0 if region.shrink['shrink_padding'] is None else region.shrink['shrink_padding']//8,
                                                     )
-                                                    | If(region.shrink['shrink_resize'] is not None,
-                                                        lambda x: x | Resize(region.shrink['shrink_resize']), desc='shrink resize')
                                                 , desc='region_mask')
                                             | If(state['cnet'] is not None, lambda x: x | state['cnet'](
                                                 timestep_index=timestep_index,
@@ -269,8 +257,6 @@ class TileRegionPipeline(Flow):
                                             )
                                             | If(region.mask is not None and region.shrink is not None,
                                                 lambda x: x
-                                                    | If(region.shrink['shrink_resize'] is not None,
-                                                        lambda x: x | Resize(1/region.shrink['shrink_resize']), desc='shrink resize')
                                                     | LatentUnshrink(
                                                         state['tile_latent_cfg'],
                                                         region.mask[tile].cfg(guidance_scale=state['guidance_scale']),

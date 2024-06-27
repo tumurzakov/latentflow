@@ -37,7 +37,7 @@ try:
     from latentflow.region import Region
     from latentflow.noop import Noop
     from latentflow.interpolate import Interpolate, Resize
-    from latentflow.flow import If, Set, Switch
+    from latentflow.flow import If, Set, Switch, Value
     from latentflow.nn_latent_upscale import NNLatentUpscale
     from latentflow.slice_utils import slice_scale
     from latentflow.mandelbrot_noise import MandelbrotNoise
@@ -113,7 +113,7 @@ except Exception as e:
 
 
 try:
-    from latentflow.pipelines import TileRegionPipeline, SimplePipeline
+    from latentflow.pipelines import TileRegionPipeline, SimplePipeline, RegionShedPipeline
 except Exception as e:
     logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 

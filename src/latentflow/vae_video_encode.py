@@ -69,7 +69,7 @@ class VaeVideoEncode(VideoEncode):
                     videos.shape, videos.device, videos.dtype)
 
             if self.video_length is None:
-                self.video_length = v.shape[1]
+                self.video_length = len(video)
 
             latents = []
             for v in videos:
