@@ -151,7 +151,6 @@ class PrecacheVideoDataset(VideoDataset):
         while self.index < count:
             for step, batch in enumerate(self):
                 progress_bar.update(1)
-                pass
 
         self.index = 0
 

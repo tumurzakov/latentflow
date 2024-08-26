@@ -1,8 +1,10 @@
+import numpy as np
 import torch
 import logging
 from typing import List, Optional, Tuple, Union, Generator
 from pathlib import Path
 import decord
+from PIL import Image
 decord.bridge.set_bridge('torch')
 
 from .flow import Flow
@@ -37,17 +39,27 @@ class VideoLoad(Flow):
 
         videos = []
         for p in path:
-            vr = decord.VideoReader(p, width=self.width, height=self.height)
-            video_length = self.video_length
-            if video_length is None:
-                video_length = len(vr)
-            sample_index = list(range(self.start_frame, self.start_frame + video_length))
-            video = vr.get_batch(sample_index)
+            if '%' in p:
+                frames = []
+                for frame_number in range(self.start_frame, self.start_frame + self.video_length):
+                    img = Image.open(p % (frame_number))
+                    img = img.resize((self.width, self.height))
+                    frames.append(torch.tensor(np.array(img)))
 
-            if self.device is not None:
-                video = video.to(self.device)
+                videos.append(torch.stack(frames))
 
-            videos.append(video)
+            else:
+                vr = decord.VideoReader(p, width=self.width, height=self.height)
+                video_length = self.video_length
+                if video_length is None:
+                    video_length = len(vr)
+                sample_index = list(range(self.start_frame, self.start_frame + video_length))
+                video = vr.get_batch(sample_index)
+
+                if self.device is not None:
+                    video = video.to(self.device)
+
+                videos.append(video)
 
         videos = torch.stack(videos)
 

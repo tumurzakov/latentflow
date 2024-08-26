@@ -7,6 +7,7 @@ try:
     from latentflow.state import State, Context, Free
     from latentflow.seed import Seed
     from latentflow.video import Video, VideoAdd
+    from latentflow.meta import Meta
     from latentflow.latent import Latent, LatentAdd, LatentSet, NoisePredict
     from latentflow.tile import Tile
     from latentflow.prompt import Prompt, PromptSetFrames
@@ -113,7 +114,7 @@ except Exception as e:
 
 
 try:
-    from latentflow.pipelines import TileRegionPipeline, SimplePipeline, RegionShedPipeline
+    from latentflow.pipelines import TileRegionPipeline, SimplePipeline, RegionShedPipeline, RegionInpaintPipeline
 except Exception as e:
     logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 

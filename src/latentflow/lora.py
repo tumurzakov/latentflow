@@ -48,6 +48,9 @@ class LoraOn(Flow):
 
         self.onload()
 
+        if len(self.lora_adapters) == 0:
+            return other
+
         self.pipe.set_adapters(self.lora_adapters, self.lora_weights)
 
         if self.fuse:

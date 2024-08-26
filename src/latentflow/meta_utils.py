@@ -24,7 +24,6 @@ def read_meta(file_path, context=None):
         for k in meta:
             if isinstance(meta[k], str):
                 c[k] = meta[k]
-        print('context', c)
         meta = change_placeholders(meta, c)
 
     return meta

@@ -19,6 +19,11 @@ class State(Flow):
         self.state.update(state)
         return self
 
+    def clone(self):
+        clone_state = State({})
+        clone_state.update(self.state)
+        return clone_state
+
     def clear(self, key):
         del self.state[key]
         gc.collect()

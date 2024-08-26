@@ -141,7 +141,7 @@ class Video(Flow):
         if not os.path.isdir(dirname):
             os.makedirs(dirname, exist_ok=True)
 
-        for i, frame in enumerate(frames):
+        for i, frame in enumerate(tqdm(frames)):
             frame_number = start_frame + i
             img = Image.fromarray(frame.detach().cpu().numpy())
             img.save(output_path % frame_number)

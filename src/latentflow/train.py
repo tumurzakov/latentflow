@@ -2,6 +2,7 @@ import torch
 import logging
 import math
 import sys
+import numpy as np
 
 from .flow import Flow
 from .meta_utils import read_meta
@@ -33,6 +34,7 @@ class Params(Flow):
 class TrainConfig:
     train_batch_size = 1
     gradient_accumulation_steps = 1
+    gradient_checkpointing = True
     mixed_precision = 'fp16'
     report_to = None
     learning_rate = 1e-4
@@ -123,6 +125,10 @@ class Train(Flow):
             mixed_precision=self.train_config.mixed_precision,
             log_with=self.train_config.report_to,
         )
+
+        if self.train_config.gradient_checkpointing:
+            self.unet.enable_gradient_checkpointing()
+
 
         # Initialize the optimizer
         optimizer = None
@@ -221,7 +227,6 @@ class Train(Flow):
                     # (this is the forward diffusion process)
                     noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps)
 
-
                     # Get the text embedding for conditioning
                     if "embeddings" in batch:
                         embeddings = batch["embeddings"]
@@ -265,6 +270,7 @@ class Train(Flow):
                     accelerator.backward(loss)
                     if accelerator.sync_gradients:
                         accelerator.clip_grad_norm_(params_to_optimize, self.train_config.max_grad_norm)
+
                     optimizer.step()
                     lr_scheduler.step()
                     optimizer.zero_grad()
@@ -293,6 +299,10 @@ class Train(Flow):
 
                     if global_step >= self.train_config.max_train_steps:
                         break
+
+                logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
+                progress_bar.set_postfix(**logs)
+
 
         save_path = f'{self.train_config.output_dir}'
         unwrapped_unet = unwrap_model(self.unet)

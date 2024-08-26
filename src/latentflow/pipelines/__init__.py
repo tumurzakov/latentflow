@@ -1,3 +1,6 @@
 from .tile_region_pipeline import TileRegionPipeline
 from .simple_pipeline import SimplePipeline
 from .region_shed_pipeline import RegionShedPipeline
+from .region_inpaint_pipeline import RegionInpaintPipeline
+from .region_shrink_inpaint_pipeline import RegionShrinkInpaintPipeline
+

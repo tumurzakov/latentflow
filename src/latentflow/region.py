@@ -54,6 +54,11 @@ class Region(Flow):
     def __setitem__(self, key, value):
         self.__dict__.update({key: value})
 
+    def __getitem__(self, key):
+        if key in self.__dict__:
+            return self.__dict__[key]
+        return None
+
     def __str__(self):
         return 'Region(%s, %s, %s)' % (
                 self.controlnet_scale,

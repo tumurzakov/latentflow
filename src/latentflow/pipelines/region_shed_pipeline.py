@@ -18,8 +18,7 @@ class MergeRegionsLatent(Flow):
                         region.mask,
                         padding=0 if region.shrink['shrink_padding'] is None else region.shrink['shrink_padding']//8,
                         )
-                    #| Resize(1/region.shrink['shrink_resize'])
-                    | state['nn_latent_upscale'](1/region.shrink['shrink_resize'])
+                    | Resize(1/region.shrink['shrink_resize'])
                     , desc='unshrink')
                 | LatentAdd(latent, mask=(region.mask | Resize(1/region.shrink['shrink_resize'])))
                 )

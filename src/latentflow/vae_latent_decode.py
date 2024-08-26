@@ -61,6 +61,10 @@ class VaeLatentDecode(LatentDecode):
         return video
 
     def decode(self, latents, chunk_size=100):
+        orig_latents = latents
+        if len(orig_latents.shape) == 4:
+            latents = rearrange(latents, '(b f) c h w -> b c f h w', f=1)
+
         video_length = latents.shape[2]
         latents = latents.to(device=self.vae.device, dtype=self.vae.dtype)
         latents = 1 / self.vae.config.scaling_factor * latents
@@ -99,9 +103,12 @@ class VaeLatentDecode(LatentDecode):
 
         video = video.to(self.onload_device)
 
-        video = rearrange(video, "(b f) c h w -> b f h w c", f=video_length)
+        if len(orig_latents.shape) == 5:
+            video = rearrange(video, "(b f) c h w -> b f h w c", f=video_length)
+
         video.div_(2).add_(0.5).clamp_(0, 1)
         video.mul_(255)
+
 
         return video.to(self.offload_device, torch.uint8)
 

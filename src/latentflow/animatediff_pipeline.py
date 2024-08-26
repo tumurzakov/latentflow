@@ -46,7 +46,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
             ):
 
         dtype = torch.float32
-        if 'fp16' in kwargs:
+        if 'fp16' in kwargs and kwargs['fp16']:
             dtype = torch.float16
 
         controlnet = None
@@ -144,7 +144,7 @@ class AnimateDiffPipeline(AnimationPipeline, Flow):
         **kwargs,
     ):
         dtype = torch.float32
-        if 'fp16' in kwargs:
+        if 'fp16' in kwargs and kwargs['fp16']:
             dtype = torch.float16
 
         if motion_module_config_path is None:
