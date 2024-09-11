@@ -3,6 +3,28 @@ import logging
 from latentflow import *
 import random
 
+def get_prompt_cnet(state, region, tile):
+    cnets = [region.controlnet_scale]
+    start_frame = state['start_frame'] + tile[2][0]
+    start_controlnet = None
+    if region.prompt[start_frame] is None:
+        for i in range(start_frame, -1, -1):
+            if region.prompt[i] is not None:
+                start_controlnet = region.prompt[i].controlnet
+                break
+
+    cnets.append(start_controlnet)
+
+    for f in tile[2]:
+        frame = state['start_frame'] + f
+        if region.prompt[frame] is not None and region.prompt[frame].controlnet is not None:
+            cnets.append(region.prompt[frame].controlnet)
+
+    filtered = [x for x in cnets if x is not None]
+    cnet_scale = filtered[-1]
+    return cnet_scale
+
+
 class BlendLatent(Flow):
     def __init__(self, latent, scale):
         self.scale = scale
@@ -173,7 +195,7 @@ class DoubleShedPipeline(Flow):
                                             timestep=state[f'timesteps{region_index+1}'][timestep_index],
                                             image=[x for x in state["tile_controlnet_shrinked_video"].cnet().tensor],
                                             timesteps=state[f'timesteps{region_index+1}'],
-                                            controlnet_scale=region.controlnet_scale,
+                                            controlnet_scale=get_prompt_cnet(state, region, tile),
                                             embeddings=region.prompt.embeddings.slice(tile[2], do_classifier_free_guidance=state['guidance_scale'] > 1.0),
                                             do_classifier_free_guidance=(state['guidance_scale'] > 1.0),
                                         ))

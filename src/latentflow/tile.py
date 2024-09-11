@@ -230,8 +230,8 @@ class TileGenerator(Flow):
         t = self.tile
 
         for l in range(-t.length, s[2]+t.length, t.length-t.length_overlap):
-            for h in range(-t.height, s[3]+t.height, t.height-t.height_overlap):
-                for w in range(-t.width, s[4]+t.width, t.width-t.height_overlap):
+            for h in range(-t.height - t.height_offset, s[3]+t.height, t.height-t.height_overlap):
+                for w in range(-t.width - t.width_offset, s[4]+t.width, t.width-t.height_overlap):
 
                     l_start = l + t.length_offset
                     l_end = l + t.length + t.length_offset

@@ -60,6 +60,24 @@ class CalcBaseMask(Flow):
 
         return region
 
+class PixelAuditDivide(Flow):
+    def __init__(self, state):
+        self.state = state
+
+    def apply(self, latent):
+        pixel_infer_count = self.state['pixel_infer_count'].tensor
+
+        if self.state['guidance_scale'] > 1.0:
+            pixel_infer_count = pixel_infer_count.repeat(2,1,1,1,1)
+
+        pixel_infer_count[pixel_infer_count == 0] = 1
+
+        l = latent.latent
+        l = l / pixel_infer_count
+
+        return Latent(l)
+
+
 def get_prompt_loras(state, region, tile):
     loras = [region.loras]
     start_frame = state['start_frame'] + tile[2][0]
@@ -149,10 +167,15 @@ class TileRegionPipeline(Flow):
 
         progress_bar_each_step = state['video_length'] >= 500 or (state['progress_bar_each_step'] is not None  and state['progress_bar_each_step'])
 
+        (state['latent']
+            | AddNoise(scheduler=state['pipe'].scheduler, timesteps=state['timesteps'])
+            | Set(state, 'latent')
+            )
+
         ((state['latent']
-            | If(state['strength'] is not None, lambda x: x
-                | AddNoise(scheduler=state['pipe'].scheduler, timesteps=state['timesteps'])
-                , desc='strength')
+            #| If(state['strength'] is not None, lambda x: x
+            #    | AddNoise(scheduler=state['pipe'].scheduler, timesteps=state['timesteps'])
+            #    , desc='strength')
             | Loop(state['timesteps'], name="Denoise loop", progress_bar=(not progress_bar_each_step), callback=lambda timestep_index, timestep:
                 (Latent(torch.zeros_like(state['latent'].latent).repeat((2 if state['guidance_scale'] > 1.0 else 1),1,1,1,1)) > state('noise_predict')) >> \
 
@@ -277,7 +300,7 @@ class TileRegionPipeline(Flow):
                 )) >> \
 
                 (state['noise_predict']
-                   | Apply(lambda x: NoisePredict(x.latent / state['pixel_infer_count'].tensor.repeat((2 if state['guidance_scale'] > 1.0 else 1),1,1,1,1)))
+                   | PixelAuditDivide(state)
                    | CFGProcess(
                        guidance_scale=state['guidance_scale'],
                        guidance_rescale=state['guidance_rescale'],

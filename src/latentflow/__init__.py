@@ -114,7 +114,7 @@ except Exception as e:
 
 
 try:
-    from latentflow.pipelines import TileRegionPipeline, SimplePipeline, RegionShedPipeline, RegionInpaintPipeline
+    from latentflow.pipelines import TileRegionPipeline, SimplePipeline, RegionShedPipeline, RegionInpaintPipeline, DoubleShedPipeline
 except Exception as e:
     logging.error("Error %s %d", str(e), sys._getframe().f_lineno)
 

@@ -2,6 +2,8 @@ import torch
 import logging
 import os
 import datetime
+import shutil
+
 
 from .flow import Flow
 
@@ -21,6 +23,10 @@ class Save(Flow):
 
         dir_path = os.path.dirname(self.path)
         os.makedirs(dir_path, exist_ok=True)
+
+        if 'additional_files' in self.kwargs:
+            for file in self.kwargs['additional_files']:
+                shutil.copyfile(file, dir_path)
 
         other.save(self.path, **self.kwargs)
         return other
